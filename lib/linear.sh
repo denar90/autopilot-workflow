@@ -24,6 +24,23 @@ linear_parse_slug() {
   fi
 }
 
+# linear_fetch <TICKET_ID> <out_json_path>
+# Routes through the agent's Linear MCP. Agent must have Linear MCP configured.
+linear_fetch() {
+  local ticket="$1" out="$2"
+  local rendered="${WT}/.autopilot/prompts/01-worktree-fetch.md"
+  mkdir -p "$(dirname "$rendered")" "${WT}/.autopilot/logs"
+  TICKET="$ticket" OUT="$out" render_prompt \
+    "${AUTOPILOT_ROOT}/prompts/01-worktree-fetch.md" "$rendered"
+  # shellcheck disable=SC2086
+  ( cd "$WT" && eval $AUTOPILOT_AGENT_CMD ) < "$rendered" \
+    | tee "$WT/.autopilot/logs/01-worktree-fetch.log"
+  if [[ ! -s "$out" ]]; then
+    log_err "Linear fetch did not produce $out. Check that the agent's Linear MCP is installed and authenticated."
+    return 1
+  fi
+}
+
 linear_branch_name() {
   local ticket
   ticket=$(echo "$1" | tr '[:upper:]' '[:lower:]')
