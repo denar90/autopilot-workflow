@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AUTOPILOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export AUTOPILOT_ROOT
+
+# shellcheck source=../lib/ui.sh
+source "$AUTOPILOT_ROOT/lib/ui.sh"
+# shellcheck source=../lib/config.sh
+source "$AUTOPILOT_ROOT/lib/config.sh"
+# shellcheck source=../lib/phases.sh
+source "$AUTOPILOT_ROOT/lib/phases.sh"
+# shellcheck source=../lib/state.sh
+source "$AUTOPILOT_ROOT/lib/state.sh"
+# shellcheck source=../lib/linear.sh
+source "$AUTOPILOT_ROOT/lib/linear.sh"
+# shellcheck source=../lib/agent.sh
+source "$AUTOPILOT_ROOT/lib/agent.sh"
+# shellcheck source=../lib/checkpoint.sh
+source "$AUTOPILOT_ROOT/lib/checkpoint.sh"
+# shellcheck source=../lib/review.sh
+source "$AUTOPILOT_ROOT/lib/review.sh"
+# shellcheck source=../lib/phase01.sh
+source "$AUTOPILOT_ROOT/lib/phase01.sh"
+# shellcheck source=../lib/phase06.sh
+source "$AUTOPILOT_ROOT/lib/phase06.sh"
+
+usage() {
+  cat <<EOF
+Usage: autopilot [--interactive | --full] <linear-url-or-id>
+
+Runs the ralph-loop from worktree creation through merge. Resumable: re-run to
+continue from the last completed phase.
+
+Modes:
+  --interactive (default)   Pause at plan TLDR and post-review checkpoints.
+  --full                    No checkpoints. Auto-approves plan; takes
+                            AUTOPILOT_DEFAULT_ACTION (default 'pr') after review.
+
+Env vars (see .autopilotrc.example):
+  AUTOPILOT_MODE            interactive | full (overridden by CLI flag)
+  AUTOPILOT_DEFAULT_ACTION  merge | pr | preview | hold (full mode only; default pr)
+  AUTOPILOT_WORKTREE_BASE   Default: \$HOME/wt
+  AUTOPILOT_AGENT_CMD       Default: claude -p ...
+  AUTOPILOT_MODEL           Default: claude-opus-4-7
+  AUTOPILOT_VERIFY_CMD      Default: make check test
+  AUTOPILOT_SETUP_CMD       Default: (none)
+  AUTOPILOT_SYMLINKS        Newline-separated paths to symlink from source repo
+
+Prerequisite: the agent referenced by AUTOPILOT_AGENT_CMD must have a Linear
+MCP server installed and authenticated.
+EOF
+}
+
+MODE_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --full)        MODE_OVERRIDE="full"; shift ;;
+    --interactive) MODE_OVERRIDE="interactive"; shift ;;
+    -h|--help)     usage; exit 0 ;;
+    --) shift; break ;;
+    -*) log_err "Unknown flag: $1"; usage; exit 2 ;;
+    *)  break ;;
+  esac
+done
+
+[[ $# -lt 1 ]] && { usage; exit 2; }
+LINEAR_INPUT="$1"
+[[ -n "$MODE_OVERRIDE" ]] && AUTOPILOT_MODE="$MODE_OVERRIDE"
+: "${AUTOPILOT_MODE:=interactive}"
+: "${AUTOPILOT_DEFAULT_ACTION:=pr}"
+export AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION
+log_info "Mode: $AUTOPILOT_MODE"
+
+SOURCE_REPO="$(pwd)"
+[[ -d "$SOURCE_REPO/.git" ]] || { log_err "Run from inside a git repo"; exit 1; }
+
+config_load
+
+TICKET=$(linear_parse_ticket "$LINEAR_INPUT") || { log_err "Bad Linear input"; exit 1; }
+SLUG=$(linear_parse_slug "$LINEAR_INPUT")
+PROJECT=$(config_project_name)
+TICKET_LC=$(echo "$TICKET" | tr '[:upper:]' '[:lower:]')
+WT="${AUTOPILOT_WORKTREE_BASE}/${PROJECT}/${TICKET_LC}"
+export TICKET SLUG PROJECT WT TICKET_LC
+
+if [[ ! -f "$WT/.autopilot/state.json" ]]; then
+  phase01_worktree "$LINEAR_INPUT" "$SOURCE_REPO"
+  mark_phase worktree_done
+fi
+
+DATE=$(date -u +%F)
+export DATE
+
+if need research_done; then run_phase 02-research && mark_phase research_done; fi
+
+if need plan_done; then run_phase 03-plan && mark_phase plan_done; fi
+
+if need plan_approved; then
+  PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
+  export PLAN_PATH
+  checkpoint_plan "$WT/$PLAN_PATH"
+  mark_phase plan_approved
+fi
+
+if need implement_done; then
+  PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
+  export PLAN_PATH
+  export VERIFY_CMD="$AUTOPILOT_VERIFY_CMD"
+  run_phase 04-implement && mark_phase implement_done
+fi
+
+for n in 1 2 3; do
+  marker="review_cycle_${n}_done"
+  if need "$marker"; then
+    run_review_cycle "$n" && mark_phase "$marker"
+  fi
+done
+
+if need review_approved; then
+  branch=$(jq -r .branch "$WT/.autopilot/state.json")
+  commits=$(git -C "$WT" rev-list --count "origin/main..HEAD")
+  checkpoint_review "$branch" "$commits"
+  mark_phase review_approved
+fi
+
+if need merged; then
+  PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
+  export PLAN_PATH
+  phase06_merge_or_pr && mark_phase merged
+fi
+
+log_ok "Autopilot done for $TICKET. Phase: $(state_phase)."
