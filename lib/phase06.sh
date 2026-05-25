@@ -25,18 +25,19 @@ emit_ready_file() {
 }
 
 phase06_merge_or_pr() {
-  local branch base ticket ticket_url head_sha pr_url=""
+  local branch base ticket ticket_url head_sha pr_url="" main_branch
   branch=$(jq -r .branch "$WT/.autopilot/state.json")
-  base=$(git -C "$WT" merge-base origin/main HEAD)
+  main_branch=$(default_branch "$WT")
+  base=$(git -C "$WT" merge-base "origin/$main_branch" HEAD)
   ticket=$(jq -r '.identifier // .ticket // empty' "$WT/.autopilot/ticket.json" 2>/dev/null)
   ticket_url=$(jq -r '.url // empty' "$WT/.autopilot/ticket.json" 2>/dev/null)
   head_sha=$(git -C "$WT" rev-parse HEAD)
 
   case "${_AUTOPILOT_REVIEW_DECISION:-hold}" in
     merge)
-      ( cd "$WT" && git checkout main && git pull --ff-only && \
+      ( cd "$WT" && git checkout "$main_branch" && git pull --ff-only && \
         git merge --no-ff "$branch" -m "merge: $branch" && \
-        git push origin main )
+        git push origin "$main_branch" )
       emit_ready_file "$ticket" "$branch" merge "$ticket_url" "" "$base" "$head_sha" "$WT"
       ;;
     pr)

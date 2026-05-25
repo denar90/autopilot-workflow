@@ -4,8 +4,9 @@
 # run_review_cycle <N>
 run_review_cycle() {
   local n="$1"
-  local base head
-  base=$(git -C "$WT" merge-base origin/main HEAD)
+  local base head main_branch
+  main_branch=$(default_branch "$WT")
+  base=$(git -C "$WT" merge-base "origin/$main_branch" HEAD)
   head=$(git -C "$WT" rev-parse HEAD)
 
   local tmp

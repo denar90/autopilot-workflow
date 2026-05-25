@@ -133,7 +133,8 @@ done
 
 if need review_approved; then
   branch=$(jq -r .branch "$WT/.autopilot/state.json")
-  commits=$(git -C "$WT" rev-list --count "origin/main..HEAD")
+  main_branch=$(default_branch "$WT")
+  commits=$(git -C "$WT" rev-list --count "origin/$main_branch..HEAD")
   checkpoint_review "$branch" "$commits"
   mark_phase review_approved
 fi

@@ -21,8 +21,9 @@ phase01_worktree() {
   if [[ -d "$WT" ]]; then
     log_warn "Worktree dir already exists — assuming resume; skipping git worktree add"
   else
-    ( cd "$source_repo" && git fetch origin main )
-    ( cd "$source_repo" && git worktree add "$WT" -b "$branch" origin/main )
+    local base; base=$(default_branch "$source_repo")
+    ( cd "$source_repo" && git fetch origin "$base" )
+    ( cd "$source_repo" && git worktree add "$WT" -b "$branch" "origin/$base" )
   fi
 
   mkdir -p "$WT/.autopilot/prompts" "$WT/.autopilot/logs"

@@ -31,3 +31,19 @@ config_project_name() {
     basename "$PWD"
   fi
 }
+
+# default_branch [<repo-dir>]
+# Returns the remote's default branch (main, master, trunk, etc.), determined
+# by `git symbolic-ref refs/remotes/origin/HEAD`. Falls back to `main` if
+# origin/HEAD isn't set (rare — most clones have it). Pass a repo dir or rely
+# on $PWD.
+default_branch() {
+  local repo="${1:-$PWD}" b
+  b=$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@') || true
+  if [[ -z "$b" ]]; then
+    # Try refreshing origin/HEAD from the remote (one-time cost per worktree).
+    git -C "$repo" remote set-head origin --auto >/dev/null 2>&1 || true
+    b=$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@') || true
+  fi
+  echo "${b:-main}"
+}
