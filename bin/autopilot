@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AUTOPILOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve symlink chain so AUTOPILOT_ROOT points at the real repo, not ~/.local/bin.
+__src="${BASH_SOURCE[0]}"
+while [ -L "$__src" ]; do
+  __dir="$(cd -P "$(dirname "$__src")" && pwd)"
+  __src="$(readlink "$__src")"
+  [[ "$__src" != /* ]] && __src="$__dir/$__src"
+done
+AUTOPILOT_ROOT="$(cd -P "$(dirname "$__src")/.." && pwd)"
+unset __src __dir
 export AUTOPILOT_ROOT
 
 # shellcheck source=../lib/ui.sh
@@ -84,7 +92,13 @@ TICKET_LC=$(echo "$TICKET" | tr '[:upper:]' '[:lower:]')
 WT="${AUTOPILOT_WORKTREE_BASE}/${PROJECT}/${TICKET_LC}"
 export TICKET SLUG PROJECT WT TICKET_LC
 
-if [[ ! -f "$WT/.autopilot/state.json" ]]; then
+# Marker file so a shell wrapper can `cd` after we exit. See README "Auto-cd".
+state_write_last_wt "$WT"
+
+set_term_title "$TICKET"
+trap 'set_term_title "$TICKET · done"' EXIT
+
+if need worktree_done; then
   phase01_worktree "$LINEAR_INPUT" "$SOURCE_REPO"
   mark_phase worktree_done
 fi
@@ -130,4 +144,5 @@ if need merged; then
   phase06_merge_or_pr && mark_phase merged
 fi
 
-log_ok "Autopilot done for $TICKET. Phase: $(state_phase)."
+TOTAL_COST=$(state_total_cost)
+log_ok "Autopilot done for $TICKET. Phase: $(state_phase). Total cost: \$$(printf '%.4f' "$TOTAL_COST")."

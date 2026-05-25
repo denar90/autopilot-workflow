@@ -16,6 +16,7 @@ checkpoint_plan() {
     log_info "Plan auto-approved (full mode)."
     return 0
   fi
+  set_term_title "${TICKET:-autopilot} · plan ✋"
   print_tldr "$plan"
   while :; do
     local ans
@@ -39,6 +40,7 @@ checkpoint_plan() {
 # checkpoint_review <branch> <commit_count>
 checkpoint_review() {
   local branch="$1" commits="$2"
+  set_term_title "${TICKET:-autopilot} · review ✋"
   feedback_summary "$WT/.autopilot/feedback.json"
   echo
   echo "Branch:  $branch"

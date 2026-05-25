@@ -4,6 +4,13 @@
 _ts() { date +"%H:%M:%S"; }
 
 log_info()  { printf "\033[1;36m[%s]\033[0m %s\n" "$(_ts)" "$*"; }
+
+# set_term_title <title> — updates the terminal tab/window title via OSC 0.
+# No-op when stderr isn't a tty (e.g. piped, CI).
+set_term_title() {
+  [[ -t 2 ]] || return 0
+  printf '\033]0;%s\007' "$*" >&2
+}
 log_warn()  { printf "\033[1;33m[%s]\033[0m %s\n" "$(_ts)" "$*" >&2; }
 log_err()   { printf "\033[1;31m[%s]\033[0m %s\n" "$(_ts)" "$*" >&2; }
 log_ok()    { printf "\033[1;32m[%s]\033[0m %s\n" "$(_ts)" "$*"; }

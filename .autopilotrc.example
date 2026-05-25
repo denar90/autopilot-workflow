@@ -8,7 +8,7 @@
 : "${AUTOPILOT_MODEL:=claude-opus-4-7}"
 
 # Coding agent invocation. Stdin = prompt, stdout = stream.
-: "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --model $AUTOPILOT_MODEL}"
+: "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
 
 # Files to symlink from the source repo into the worktree on creation.
 # Newline-separated list of paths relative to the source repo root.

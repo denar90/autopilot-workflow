@@ -4,5 +4,6 @@
   "branch": null,
   "plan_path": null,
   "phase": "none",
-  "updated_at": null
+  "updated_at": null,
+  "total_cost_usd": 0
 }

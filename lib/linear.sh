@@ -32,13 +32,16 @@ linear_fetch() {
   mkdir -p "$(dirname "$rendered")" "${WT}/.autopilot/logs"
   TICKET="$ticket" OUT="$out" render_prompt \
     "${AUTOPILOT_ROOT}/prompts/01-worktree-fetch.md" "$rendered"
+  set_term_title "${ticket} · linear-fetch"
   # shellcheck disable=SC2086
-  ( cd "$WT" && eval $AUTOPILOT_AGENT_CMD ) < "$rendered" \
-    | tee "$WT/.autopilot/logs/01-worktree-fetch.log"
+  ( cd "$WT" && eval $AUTOPILOT_AGENT_CMD ) < "$rendered" 2>&1 \
+    | tee "$WT/.autopilot/logs/01-worktree-fetch.log" \
+    | agent_pretty
   if [[ ! -s "$out" ]]; then
     log_err "Linear fetch did not produce $out. Check that the agent's Linear MCP is installed and authenticated."
     return 1
   fi
+  state_add_cost "$WT/.autopilot/logs/01-worktree-fetch.log"
 }
 
 linear_branch_name() {
