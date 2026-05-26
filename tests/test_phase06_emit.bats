@@ -32,3 +32,46 @@ make_fake_wt() {
   emit_ready_file TRA-2 feature/tra-2 pr "" "" "a" "b" "/tmp/x"
   # Should be a no-op; no assertion required beyond non-failure.
 }
+
+@test "gh_available: fails when gh is not installed" {
+  # Force PATH to a dir with no `gh` binary.
+  PATH="$BATS_TEST_TMPDIR" run gh_available
+  [ "$status" -ne 0 ]
+}
+
+@test "gh_available: fails when gh exists but auth status is non-zero" {
+  # Shim gh with a stub that exits non-zero on `gh auth status`.
+  local bin="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$bin"
+  cat > "$bin/gh" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == "auth" && "$2" == "status" ]]; then exit 1; fi
+exit 0
+EOF
+  chmod +x "$bin/gh"
+  PATH="$bin:$PATH" run gh_available
+  [ "$status" -ne 0 ]
+}
+
+@test "gh_available: succeeds when gh exists and auth status is OK" {
+  local bin="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$bin"
+  cat > "$bin/gh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$bin/gh"
+  PATH="$bin:$PATH" run gh_available
+  [ "$status" -eq 0 ]
+}
+
+@test "emit_ready_file: action push_only is recorded when set" {
+  wt=$(make_fake_wt)
+  base=$(git -C "$wt" rev-parse HEAD)
+  ( cd "$wt" && echo c > c.txt && git add . && git commit -q -m c )
+  head=$(git -C "$wt" rev-parse HEAD)
+
+  export AUTOPILOT_QUEUE_DIR="$BATS_TEST_TMPDIR/q"
+  emit_ready_file TRA-3 feature/tra-3 push_only "https://linear/TRA-3" "" "$base" "$head" "$wt"
+  jq -e '.actionTaken == "push_only" and .prUrl == ""' "$AUTOPILOT_QUEUE_DIR/TRA-3.ready.json"
+}
