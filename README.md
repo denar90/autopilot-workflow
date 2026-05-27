@@ -1,5 +1,7 @@
 # autopilot_sh
 
+![Linear ticket → research → plan → implement → review → merge, with fresh agent subprocess per phase and on-disk resume state](docs/overview.png)
+
 Resumable, agent-agnostic ralph-loop driver: takes a Linear ticket from worktree creation through merge as a sequence of single-shot agent subprocesses.
 
 ## Why
