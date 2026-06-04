@@ -51,6 +51,29 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "run_phase dispatches filter by profile" {
+  TMP="$(mktemp -d)"
+  export AUTOPILOT_ROOT="$TMP/root"
+  export WT="$TMP/wt"
+  mkdir -p "$AUTOPILOT_ROOT/prompts" "$WT/.autopilot"
+  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"HELLO"}]}}' \
+    > "$AUTOPILOT_ROOT/prompts/smoke.md"
+  export AUTOPILOT_AGENT_CMD="cat"
+  export AUTOPILOT_CODEX_CMD="cat"
+
+  out_primary="$(run_phase smoke primary | sed $'s/\x1b\\[[0-9;]*m//g')"
+  out_cross="$(run_phase smoke cross | sed $'s/\x1b\\[[0-9;]*m//g')"
+  rm -rf "$TMP"
+
+  # Cleanup happens before the assertions so a failing assertion (not the rm)
+  # is the test's final command — bats only fails a test on its last command.
+  # agent_pretty extracts the text and drops the raw JSON envelope
+  [[ "$out_primary" == *"HELLO"* ]]
+  [[ "$out_primary" != *'"type":"assistant"'* ]]
+  # cat passes the raw stream-json line through verbatim
+  [[ "$out_cross" == *'"type":"assistant"'* ]]
+}
+
 @test "agent_pretty extracts assistant text" {
   json='{"type":"assistant","message":{"content":[{"type":"text","text":"hello world"}]}}'
   out=$(printf '%s\n' "$json" | agent_pretty | sed $'s/\x1b\\[[0-9;]*m//g')

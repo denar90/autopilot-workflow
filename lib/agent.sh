@@ -82,9 +82,13 @@ render_prompt() {
   sed -E 's/\{\{([A-Z_][A-Z0-9_]*)\}\}/\$\{\1\}/g' "$tmpl" | envsubst > "$out"
 }
 
-# run_phase <phase_name>
+# run_phase <phase_name> [<profile>]
 run_phase() {
   local name="$1"
+  local profile="${2:-primary}"
+  local cmd filter
+  cmd="$(agent_cmd_for "$profile")"
+  filter="$(agent_filter_for "$profile")"
   local repo_root="${AUTOPILOT_ROOT}"
   local tmpl="${repo_root}/prompts/${name}.md"
   local rendered="${WT}/.autopilot/prompts/${name}.md"
@@ -93,13 +97,12 @@ run_phase() {
   mkdir -p "${WT}/.autopilot/prompts" "${WT}/.autopilot/logs"
   render_prompt "$tmpl" "$rendered" || return 1
 
-  log_info "Phase ${name} → ${AUTOPILOT_AGENT_CMD%% *}"
+  log_info "Phase ${name} → ${cmd%% *}"
   set_term_title "${TICKET:-autopilot} · ${name}"
-  # Full raw JSON goes to log; terminal sees only filtered human-readable lines.
-  # shellcheck disable=SC2086
-  ( cd "$WT" && eval $AUTOPILOT_AGENT_CMD ) < "$rendered" 2>&1 \
+  # Full raw output goes to log; terminal sees only the profile's filtered view.
+  ( cd "$WT" && eval "$cmd" ) < "$rendered" 2>&1 \
     | tee "$logf" \
-    | agent_pretty
+    | "$filter"
   local rc="${PIPESTATUS[0]}"
   if [[ "$rc" -ne 0 ]]; then
     log_err "Phase ${name} exited ${rc}. Log: ${logf}"
