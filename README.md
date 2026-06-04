@@ -86,7 +86,7 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_DEFAULT_ACTION` | `pr` | In `full` mode: what to do after review (`merge`/`pr`/`preview`/`hold`) |
 | `AUTOPILOT_WORKTREE_BASE` | `$HOME/wt` | Where worktrees live |
 | `AUTOPILOT_AGENT_CMD` | `claude -p --output-format=stream-json --model $AUTOPILOT_MODEL` | Coding-agent CLI. Reads prompt on stdin. |
-| `AUTOPILOT_CODEX_CMD` | `codex exec --full-auto` | Cross-review agent run each cycle between adversary and fixer. Skipped if binary absent; empty to disable. |
+| `AUTOPILOT_CODEX_CMD` | `codex exec --json --full-auto` | Cross-review agent run each cycle between adversary and fixer. `--json` is rendered by `codex_pretty`. Skipped if binary absent; empty to disable. |
 | `AUTOPILOT_MODEL` | `claude-opus-4-7` | Model passed to the agent |
 | `AUTOPILOT_VERIFY_CMD` | `make check test` | Run at end of implement + after each fixer cycle |
 | `AUTOPILOT_SETUP_CMD` | (none) | Run inside fresh worktree (e.g. `pnpm install`) |

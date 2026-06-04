@@ -39,7 +39,7 @@ EOF
 
 @test "config_load defaults AUTOPILOT_CODEX_CMD to a codex invocation" {
   config_load
-  [ "${AUTOPILOT_CODEX_CMD}" = "codex exec --full-auto" ]
+  [ "${AUTOPILOT_CODEX_CMD}" = "codex exec --json --full-auto" ]
 }
 
 @test "config_load preserves caller-set AUTOPILOT_CODEX_CMD" {

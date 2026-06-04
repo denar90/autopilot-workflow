@@ -5,7 +5,7 @@ config_load() {
   : "${AUTOPILOT_WORKTREE_BASE:=$HOME/wt}"
   : "${AUTOPILOT_MODEL:=claude-opus-4-7}"
   : "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
-  : "${AUTOPILOT_CODEX_CMD:=codex exec --full-auto}"
+  : "${AUTOPILOT_CODEX_CMD:=codex exec --json --full-auto}"
   : "${AUTOPILOT_SETUP_CMD:=}"
   : "${AUTOPILOT_VERIFY_CMD:=make check test}"
   : "${AUTOPILOT_SYMLINKS:=}"

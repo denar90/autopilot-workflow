@@ -13,7 +13,7 @@ agent_cmd_for() {
 
 agent_filter_for() {
   case "$1" in
-    cross) printf 'cat' ;;          # Codex streams plain text; pass through verbatim
+    cross) printf 'codex_pretty' ;; # Codex --json JSONL → human-readable
     *)     printf 'agent_pretty' ;; # Claude stream-json → human-readable
   esac
 }
@@ -64,6 +64,52 @@ agent_pretty() {
             "  \($dim)[session \(.session_id[0:8])] model=\(.model)\($reset)\n"
           elif .type == "result" then
             "\n\($green_b)[done]\($reset) \($green)turns=\(.num_turns // "?") cost=$\(.total_cost_usd // 0) duration_ms=\(.duration_ms // 0)\($reset)\n"
+          else empty end
+        ' 2>/dev/null || true
+        ;;
+      *)
+        printf '%s\n' "$line"
+        ;;
+    esac
+  done
+}
+
+# codex_pretty: stream codex `exec --json` JSONL on stdin → human-readable lines.
+# Codex's event schema differs from Claude's: thread.started / turn.* envelopes
+# and item.started|completed wrapping {agent_message, command_execution,
+# reasoning}. Non-JSON status lines (e.g. "Reading prompt from stdin...") pass
+# through verbatim.
+codex_pretty() {
+  while IFS= read -r line; do
+    case "$line" in
+      '{'*)
+        printf '%s\n' "$line" | jq -rj \
+          --arg cyan "$(printf '\033[36m')" \
+          --arg cyan_b "$(printf '\033[1;36m')" \
+          --arg green "$(printf '\033[32m')" \
+          --arg green_b "$(printf '\033[1;32m')" \
+          --arg red "$(printf '\033[31m')" \
+          --arg dim "$(printf '\033[2m')" \
+          --arg reset "$(printf '\033[0m')" '
+          if (.type == "item.started" or .type == "item.completed") then
+            (.item // {}) as $it
+            | if $it.type == "command_execution" then
+                if .type == "item.started" then
+                  "  \($cyan_b)→\($reset) \($cyan)\($it.command // "")\($reset)\n"
+                elif ($it.exit_code != null and $it.exit_code != 0) then
+                  "  \($red)exit \($it.exit_code)\($reset)\n"
+                else "" end
+              elif $it.type == "agent_message" then
+                if .type == "item.completed" then (($it.text // "") + "\n") else "" end
+              elif $it.type == "reasoning" then
+                if (.type == "item.completed" and (($it.text // "") != "")) then
+                  "  \($dim)\($it.text)\($reset)\n"
+                else "" end
+              else "" end
+          elif .type == "turn.completed" then
+            "\n\($green_b)[done]\($reset) \($green)tokens in=\(.usage.input_tokens // "?") out=\(.usage.output_tokens // "?")\($reset)\n"
+          elif .type == "thread.started" then
+            "  \($dim)[codex thread \((.thread_id // "")[0:8])]\($reset)\n"
           else empty end
         ' 2>/dev/null || true
         ;;

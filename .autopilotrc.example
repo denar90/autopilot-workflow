@@ -13,7 +13,9 @@
 # Cross-review agent (a second model that reviews after Claude's reviewer/adversary,
 # before the fixer). Runs every review cycle. Stdin = prompt. Leave empty to disable
 # even when codex is installed. Skipped automatically if the binary isn't on PATH.
-: "${AUTOPILOT_CODEX_CMD:=codex exec --full-auto}"
+# `--json` makes codex emit JSONL events, which autopilot renders via codex_pretty;
+# drop it to fall back to codex's raw plain-text stream.
+: "${AUTOPILOT_CODEX_CMD:=codex exec --json --full-auto}"
 
 # Files to symlink from the source repo into the worktree on creation.
 # Newline-separated list of paths relative to the source repo root.

@@ -28,8 +28,8 @@ setup() {
   [ "$(agent_filter_for primary)" = "agent_pretty" ]
 }
 
-@test "agent_filter_for cross returns cat" {
-  [ "$(agent_filter_for cross)" = "cat" ]
+@test "agent_filter_for cross returns codex_pretty" {
+  [ "$(agent_filter_for cross)" = "codex_pretty" ]
 }
 
 @test "codex_available false when AUTOPILOT_CODEX_CMD empty" {
@@ -56,7 +56,9 @@ setup() {
   export AUTOPILOT_ROOT="$TMP/root"
   export WT="$TMP/wt"
   mkdir -p "$AUTOPILOT_ROOT/prompts" "$WT/.autopilot"
-  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"HELLO"}]}}' \
+  # A codex agent_message event: agent_pretty (primary) drops it; codex_pretty
+  # (cross) renders the text. This proves the filter is dispatched by profile.
+  printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"HELLO"}}' \
     > "$AUTOPILOT_ROOT/prompts/smoke.md"
   export AUTOPILOT_AGENT_CMD="cat"
   export AUTOPILOT_CODEX_CMD="cat"
@@ -67,11 +69,10 @@ setup() {
 
   # Cleanup happens before the assertions so a failing assertion (not the rm)
   # is the test's final command — bats only fails a test on its last command.
-  # agent_pretty extracts the text and drops the raw JSON envelope
-  [[ "$out_primary" == *"HELLO"* ]]
-  [[ "$out_primary" != *'"type":"assistant"'* ]]
-  # cat passes the raw stream-json line through verbatim
-  [[ "$out_cross" == *'"type":"assistant"'* ]]
+  # agent_pretty does not understand codex events → drops the line
+  [[ "$out_primary" != *"HELLO"* ]]
+  # codex_pretty renders the agent_message text
+  [[ "$out_cross" == *"HELLO"* ]]
 }
 
 @test "agent_pretty extracts assistant text" {
@@ -153,5 +154,73 @@ EOF
   [[ "$out" == *"→ Read"* ]]
   [[ "$out" == *"· Reading /a.ts"* ]]
   [[ "$out" == *"All done."* ]]
+  [[ "$out" == *"[done]"* ]]
+}
+
+# --- codex_pretty: renders codex's `--json` JSONL stream -----------------------
+
+@test "codex_pretty renders agent_message text" {
+  json='{"type":"item.completed","item":{"id":"i0","type":"agent_message","text":"a real finding"}}'
+  out=$(printf '%s\n' "$json" | codex_pretty | sed $'s/\x1b\\[[0-9;]*m//g')
+  [[ "$out" == *"a real finding"* ]]
+}
+
+@test "codex_pretty shows command_execution as arrow + command on start" {
+  json='{"type":"item.started","item":{"id":"i1","type":"command_execution","command":"/bin/zsh -lc pwd","status":"in_progress"}}'
+  out=$(printf '%s\n' "$json" | codex_pretty | sed $'s/\x1b\\[[0-9;]*m//g')
+  [[ "$out" == *"→"* ]]
+  [[ "$out" == *"/bin/zsh -lc pwd"* ]]
+}
+
+@test "codex_pretty does not repeat the command on a successful completion" {
+  json='{"type":"item.completed","item":{"id":"i1","type":"command_execution","command":"echo hi","aggregated_output":"hi\n","exit_code":0,"status":"completed"}}'
+  out=$(printf '%s\n' "$json" | codex_pretty | sed $'s/\x1b\\[[0-9;]*m//g')
+  [ -z "${out//[[:space:]]/}" ]
+}
+
+@test "codex_pretty flags a non-zero command exit" {
+  json='{"type":"item.completed","item":{"id":"i1","type":"command_execution","command":"false","exit_code":2,"status":"completed"}}'
+  out=$(printf '%s\n' "$json" | codex_pretty | sed $'s/\x1b\\[[0-9;]*m//g')
+  [[ "$out" == *"exit 2"* ]]
+}
+
+@test "codex_pretty prints turn.completed token summary" {
+  json='{"type":"turn.completed","usage":{"input_tokens":120,"output_tokens":34}}'
+  out=$(printf '%s\n' "$json" | codex_pretty | sed $'s/\x1b\\[[0-9;]*m//g')
+  [[ "$out" == *"[done]"* ]]
+  [[ "$out" == *"out=34"* ]]
+}
+
+@test "codex_pretty prints a short thread header" {
+  json='{"type":"thread.started","thread_id":"019e924f-134f-7090-a391-7533cba689ae"}'
+  out=$(printf '%s\n' "$json" | codex_pretty | sed $'s/\x1b\\[[0-9;]*m//g')
+  [[ "$out" == *"019e924f"* ]]
+}
+
+@test "codex_pretty drops unknown / noise event types" {
+  json='{"type":"turn.started"}'
+  out=$(printf '%s\n' "$json" | codex_pretty)
+  [ -z "$out" ]
+}
+
+@test "codex_pretty passes through non-JSON lines verbatim" {
+  out=$(printf '%s\n' "Reading prompt from stdin..." | codex_pretty)
+  [ "$out" = "Reading prompt from stdin..." ]
+}
+
+@test "codex_pretty handles a mixed multi-line stream" {
+  out=$(cat <<'EOF' | codex_pretty | sed $'s/\x1b\\[[0-9;]*m//g'
+{"type":"thread.started","thread_id":"019e924f-1234"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"i0","type":"agent_message","text":"Checking the diff."}}
+{"type":"item.started","item":{"id":"i1","type":"command_execution","command":"git diff","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"i1","type":"command_execution","command":"git diff","aggregated_output":"...","exit_code":0,"status":"completed"}}
+{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":20}}
+EOF
+)
+  [[ "$out" == *"019e924f"* ]]
+  [[ "$out" == *"Checking the diff."* ]]
+  [[ "$out" == *"→"* ]]
+  [[ "$out" == *"git diff"* ]]
   [[ "$out" == *"[done]"* ]]
 }
