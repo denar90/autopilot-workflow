@@ -48,9 +48,24 @@ autopilot https://linear.app/<team>/issue/TEAM-123/some-slug
 
 # Full autopilot: no human in the loop.
 autopilot --full https://linear.app/<team>/issue/TEAM-123/some-slug
+
+# Plan-file mode: run an existing plan, no Linear ticket.
+autopilot docs/plans/2026-06-04-shared-app-sidebar.md
 ```
 
 Re-run the same command to resume from the last completed phase. See [Resuming after interruption](#resuming-after-interruption) below for details.
+
+### Plan-file mode
+
+Pass a plan file (an argument ending in `.md`, or any existing file) instead of a
+Linear URL to run a plan you already wrote — useful when you've planned by hand, or
+in a repo without Linear. Autopilot skips the Linear fetch, research, and plan
+phases: it creates a worktree (`<base>/<project>/<slug>`, branch `feature/<slug>`,
+slug derived from the filename minus any leading `YYYY-MM-DD-`), copies the plan to
+`.autopilot/plan.md`, and resumes at the implement phase. The plan is treated as
+pre-approved, so the plan checkpoint is skipped; the post-review checkpoint still
+applies. Everything downstream — implement, the reviewer/adversary/codex cycle, and
+merge/PR — runs exactly as in ticket mode.
 
 ## Modes
 
@@ -98,6 +113,8 @@ worktree → research → plan → [checkpoint] → implement → review×3 → 
 ```
 
 Each `review` cycle runs reviewer → adversary → **codex cross-review** (if `codex` is on PATH) → fixer.
+
+[Plan-file mode](#plan-file-mode) enters the pipeline at `implement`, skipping `worktree`'s Linear fetch plus the `research`, `plan`, and plan-`[checkpoint]` steps.
 
 Each phase writes a marker to `<worktree>/.autopilot/state.json`. Re-running the entry script skips completed phases.
 
