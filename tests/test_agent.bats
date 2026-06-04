@@ -7,6 +7,31 @@ setup() {
   source "$LIB_DIR/agent.sh"
 }
 
+@test "agent_cmd_for primary returns AUTOPILOT_AGENT_CMD" {
+  export AUTOPILOT_AGENT_CMD="claude -p"
+  export AUTOPILOT_CODEX_CMD="codex exec"
+  [ "$(agent_cmd_for primary)" = "claude -p" ]
+}
+
+@test "agent_cmd_for cross returns AUTOPILOT_CODEX_CMD" {
+  export AUTOPILOT_AGENT_CMD="claude -p"
+  export AUTOPILOT_CODEX_CMD="codex exec"
+  [ "$(agent_cmd_for cross)" = "codex exec" ]
+}
+
+@test "agent_cmd_for unknown profile falls back to primary" {
+  export AUTOPILOT_AGENT_CMD="claude -p"
+  [ "$(agent_cmd_for whatever)" = "claude -p" ]
+}
+
+@test "agent_filter_for primary returns agent_pretty" {
+  [ "$(agent_filter_for primary)" = "agent_pretty" ]
+}
+
+@test "agent_filter_for cross returns cat" {
+  [ "$(agent_filter_for cross)" = "cat" ]
+}
+
 @test "agent_pretty extracts assistant text" {
   json='{"type":"assistant","message":{"content":[{"type":"text","text":"hello world"}]}}'
   out=$(printf '%s\n' "$json" | agent_pretty | sed $'s/\x1b\\[[0-9;]*m//g')

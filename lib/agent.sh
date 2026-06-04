@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 # Agent invocation wrapper. Requires: $WT, $AUTOPILOT_AGENT_CMD, lib/ui.sh sourced.
 
+# Agent profiles: resolve a command + output filter by profile name. This is the
+# bash-3.2-safe seam the README's reserved AUTOPILOT_AGENT=claude|codex|aider work
+# will grow into (no associative arrays). Today: "primary" (Claude) and "cross" (Codex).
+agent_cmd_for() {
+  case "$1" in
+    cross) printf '%s' "$AUTOPILOT_CODEX_CMD" ;;
+    *)     printf '%s' "$AUTOPILOT_AGENT_CMD" ;;
+  esac
+}
+
+agent_filter_for() {
+  case "$1" in
+    cross) printf 'cat' ;;          # Codex streams plain text; pass through verbatim
+    *)     printf 'agent_pretty' ;; # Claude stream-json → human-readable
+  esac
+}
+
 # agent_pretty: stream Claude stream-json on stdin → human-readable lines on stdout.
 # Non-JSON lines pass through verbatim.
 agent_pretty() {
