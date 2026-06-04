@@ -33,5 +33,21 @@ run_review_cycle() {
 
   run_phase 05a-reviewer  || return 1
   run_phase 05b-adversary || return 1
+
+  if codex_available; then
+    local fb="$WT/.autopilot/feedback.json"
+    cp "$fb" "$fb.bak"
+    if run_phase 05bx-codex cross; then
+      feedback_restore_if_corrupt "$fb" "$fb.bak" || return 1
+      rm -f "$fb.bak"
+    else
+      log_err "Codex phase failed; restoring feedback.json"
+      mv "$fb.bak" "$fb"
+      return 1
+    fi
+  else
+    log_warn "codex not on PATH; skipping cross-review (set/clear AUTOPILOT_CODEX_CMD to control)"
+  fi
+
   run_phase 05c-fixer     || return 1
 }
