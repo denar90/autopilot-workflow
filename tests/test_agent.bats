@@ -32,6 +32,25 @@ setup() {
   [ "$(agent_filter_for cross)" = "cat" ]
 }
 
+@test "codex_available false when AUTOPILOT_CODEX_CMD empty" {
+  export AUTOPILOT_CODEX_CMD=""
+  run codex_available
+  [ "$status" -ne 0 ]
+}
+
+@test "codex_available false when binary not on PATH" {
+  export AUTOPILOT_CODEX_CMD="definitely-not-a-real-binary-xyz exec"
+  run codex_available
+  [ "$status" -ne 0 ]
+}
+
+@test "codex_available true when first word resolves on PATH" {
+  # 'env' is a coreutils binary present on every PATH
+  export AUTOPILOT_CODEX_CMD="env exec --full-auto"
+  run codex_available
+  [ "$status" -eq 0 ]
+}
+
 @test "agent_pretty extracts assistant text" {
   json='{"type":"assistant","message":{"content":[{"type":"text","text":"hello world"}]}}'
   out=$(printf '%s\n' "$json" | agent_pretty | sed $'s/\x1b\\[[0-9;]*m//g')

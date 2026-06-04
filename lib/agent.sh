@@ -18,6 +18,14 @@ agent_filter_for() {
   esac
 }
 
+# codex_available: true when the cross-review command is configured AND its binary
+# resolves on PATH. Empty AUTOPILOT_CODEX_CMD disables the pass even if codex exists.
+codex_available() {
+  [[ -n "${AUTOPILOT_CODEX_CMD:-}" ]] || return 1
+  local first="${AUTOPILOT_CODEX_CMD%% *}"
+  command -v "$first" >/dev/null 2>&1
+}
+
 # agent_pretty: stream Claude stream-json on stdin → human-readable lines on stdout.
 # Non-JSON lines pass through verbatim.
 agent_pretty() {
