@@ -71,6 +71,7 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_DEFAULT_ACTION` | `pr` | In `full` mode: what to do after review (`merge`/`pr`/`preview`/`hold`) |
 | `AUTOPILOT_WORKTREE_BASE` | `$HOME/wt` | Where worktrees live |
 | `AUTOPILOT_AGENT_CMD` | `claude -p --output-format=stream-json --model $AUTOPILOT_MODEL` | Coding-agent CLI. Reads prompt on stdin. |
+| `AUTOPILOT_CODEX_CMD` | `codex exec --full-auto` | Cross-review agent run each cycle between adversary and fixer. Skipped if binary absent; empty to disable. |
 | `AUTOPILOT_MODEL` | `claude-opus-4-7` | Model passed to the agent |
 | `AUTOPILOT_VERIFY_CMD` | `make check test` | Run at end of implement + after each fixer cycle |
 | `AUTOPILOT_SETUP_CMD` | (none) | Run inside fresh worktree (e.g. `pnpm install`) |
@@ -95,6 +96,8 @@ Whichever agent you choose, it must have a Linear MCP server installed and authe
 ```
 worktree → research → plan → [checkpoint] → implement → review×3 → [checkpoint] → merge|pr|preview|hold
 ```
+
+Each `review` cycle runs reviewer → adversary → **codex cross-review** (if `codex` is on PATH) → fixer.
 
 Each phase writes a marker to `<worktree>/.autopilot/state.json`. Re-running the entry script skips completed phases.
 
@@ -179,6 +182,11 @@ The pipeline (state machine, phases, checkpoints, review cycle) is agent-agnosti
 ### Agent-agnostic mode
 
 Add `AUTOPILOT_AGENT=claude|codex|aider` that picks the right defaults so users don't hand-craft every flag.
+
+The agent-profile seam (`lib/agent.sh::agent_cmd_for` / `agent_filter_for`) already
+dispatches command + output filter by profile name (`primary`, `cross`). Extending it to
+a full `AUTOPILOT_AGENT=claude|codex|aider` selector for the *primary* agent is the
+natural next step.
 
 - **Pretty filter** (`lib/agent.sh::agent_pretty`) — currently parses Claude's `stream-json` schema (`{"type":"assistant","message":{"content":[...]}}`). Non-JSON lines already pass through verbatim, so dropping `--output-format=stream-json` from `AUTOPILOT_AGENT_CMD` gives you the agent's native streaming UI for free. A proper fix is per-agent filters dispatched by the new env var.
 - **Permission flag** — `--permission-mode bypassPermissions` is Claude-Code syntax. Codex uses `--full-auto`; aider auto-approves by default.
