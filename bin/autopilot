@@ -92,8 +92,13 @@ INPUT="$1"
 export AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION
 log_info "Mode: $AUTOPILOT_MODE"
 
-SOURCE_REPO="$(pwd)"
-[[ -d "$SOURCE_REPO/.git" ]] || { log_err "Run from inside a git repo"; exit 1; }
+# Resolve the repo root from wherever we're invoked. `git rev-parse` handles
+# subdirectories and linked worktrees (where .git is a file, not a directory) —
+# an `-d .git` test would reject both. CWD is kept separately so a relative plan
+# path resolves against the caller's directory, not the repo root.
+CWD="$(pwd)"
+SOURCE_REPO="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$SOURCE_REPO" ]] || { log_err "Run from inside a git repo (cwd: $CWD)"; exit 1; }
 
 config_load
 
@@ -103,7 +108,7 @@ PLAN_MODE=0
 if is_plan_input "$INPUT"; then
   PLAN_MODE=1
   PLAN_SRC="$INPUT"
-  [[ "$PLAN_SRC" = /* ]] || PLAN_SRC="$SOURCE_REPO/$PLAN_SRC"
+  [[ "$PLAN_SRC" = /* ]] || PLAN_SRC="$CWD/$PLAN_SRC"
   [[ -f "$PLAN_SRC" ]] || { log_err "Plan file not found: $PLAN_SRC"; exit 1; }
   SLUG=$(plan_slug "$PLAN_SRC")
   TICKET="$SLUG"
