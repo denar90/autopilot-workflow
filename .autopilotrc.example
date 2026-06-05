@@ -5,7 +5,7 @@
 : "${AUTOPILOT_WORKTREE_BASE:=$HOME/wt}"
 
 # Default model passed to the agent.
-: "${AUTOPILOT_MODEL:=claude-opus-4-7}"
+: "${AUTOPILOT_MODEL:=claude-opus-4-8}"
 
 # Coding agent invocation. Stdin = prompt, stdout = stream.
 : "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
