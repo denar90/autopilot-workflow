@@ -131,6 +131,10 @@ state_write_last_wt "$WT"
 
 set_term_title "$TICKET"
 trap 'set_term_title "$TICKET · done"' EXIT
+# A Ctrl-C (or kill) must abort the run WITHOUT advancing state. Without this,
+# the agent CLI catches SIGINT and exits 0, which would otherwise look like a
+# successful phase and get marked done — silently skipping real work on resume.
+trap 'log_err "Interrupted — stopping. State not advanced; re-run to resume this phase."; exit 130' INT TERM
 
 DATE=$(date -u +%F)
 export DATE
@@ -148,9 +152,15 @@ else
     mark_phase worktree_done
   fi
 
-  if need research_done; then run_phase 02-research && mark_phase research_done; fi
+  if need research_done; then
+    run_phase 02-research || { log_err "research phase failed — stopping."; exit 1; }
+    mark_phase research_done
+  fi
 
-  if need plan_done; then run_phase 03-plan && mark_phase plan_done; fi
+  if need plan_done; then
+    run_phase 03-plan || { log_err "plan phase failed — stopping."; exit 1; }
+    mark_phase plan_done
+  fi
 
   if need plan_approved; then
     PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
@@ -164,13 +174,24 @@ if need implement_done; then
   PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
   export PLAN_PATH
   export VERIFY_CMD="$AUTOPILOT_VERIFY_CMD"
-  run_phase 04-implement && mark_phase implement_done
+  run_phase 04-implement || { log_err "implement phase failed — stopping."; exit 1; }
+  # Guard: implement must produce real work. If it exits 0 but leaves zero commits
+  # over the base (e.g. the agent was interrupted and the CLI exited cleanly), do
+  # NOT mark it done — otherwise resume skips ahead and review runs an empty diff.
+  impl_main=$(default_branch "$WT")
+  impl_commits=$(git -C "$WT" rev-list --count "origin/${impl_main}..HEAD" 2>/dev/null || echo 0)
+  if [[ "$impl_commits" -lt 1 ]]; then
+    log_err "implement finished with 0 commits over origin/${impl_main} — likely interrupted or incomplete. Not advancing; re-run to retry."
+    exit 1
+  fi
+  mark_phase implement_done
 fi
 
 for n in 1 2 3; do
   marker="review_cycle_${n}_done"
   if need "$marker"; then
-    run_review_cycle "$n" && mark_phase "$marker"
+    run_review_cycle "$n" || { log_err "review cycle $n failed — stopping."; exit 1; }
+    mark_phase "$marker"
   fi
 done
 
@@ -185,7 +206,8 @@ fi
 if need merged; then
   PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
   export PLAN_PATH
-  phase06_merge_or_pr && mark_phase merged
+  phase06_merge_or_pr || { log_err "merge/pr phase failed — stopping."; exit 1; }
+  mark_phase merged
 fi
 
 TOTAL_COST=$(state_total_cost)
