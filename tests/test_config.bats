@@ -37,6 +37,27 @@ EOF
   [ "${AUTOPILOT_WORKTREE_BASE}" = "/override" ]
 }
 
+@test "config_load defaults AUTOPILOT_MODEL to the latest Opus" {
+  config_load
+  [ "${AUTOPILOT_MODEL}" = "claude-opus-4-8" ]
+}
+
+@test "config_load threads AUTOPILOT_MODEL into AUTOPILOT_AGENT_CMD" {
+  config_load
+  [[ "${AUTOPILOT_AGENT_CMD}" == *"claude-opus-4-8"* ]]
+}
+
+@test "config_load defaults AUTOPILOT_CODEX_CMD to a codex invocation" {
+  config_load
+  [ "${AUTOPILOT_CODEX_CMD}" = "codex exec --json --full-auto" ]
+}
+
+@test "config_load preserves caller-set AUTOPILOT_CODEX_CMD" {
+  export AUTOPILOT_CODEX_CMD="codex --custom"
+  config_load
+  [ "${AUTOPILOT_CODEX_CMD}" = "codex --custom" ]
+}
+
 @test "config_project_name uses git remote when available" {
   git init -q
   git remote add origin git@github.com:foo/my-cool-repo.git

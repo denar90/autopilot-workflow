@@ -48,9 +48,24 @@ autopilot https://linear.app/<team>/issue/TEAM-123/some-slug
 
 # Full autopilot: no human in the loop.
 autopilot --full https://linear.app/<team>/issue/TEAM-123/some-slug
+
+# Plan-file mode: run an existing plan, no Linear ticket.
+autopilot docs/plans/2026-06-04-shared-app-sidebar.md
 ```
 
 Re-run the same command to resume from the last completed phase. See [Resuming after interruption](#resuming-after-interruption) below for details.
+
+### Plan-file mode
+
+Pass a plan file (an argument ending in `.md`, or any existing file) instead of a
+Linear URL to run a plan you already wrote — useful when you've planned by hand, or
+in a repo without Linear. Autopilot skips the Linear fetch, research, and plan
+phases: it creates a worktree (`<base>/<project>/<slug>`, branch `feature/<slug>`,
+slug derived from the filename minus any leading `YYYY-MM-DD-`), copies the plan to
+`.autopilot/plan.md`, and resumes at the implement phase. The plan is treated as
+pre-approved, so the plan checkpoint is skipped; the post-review checkpoint still
+applies. Everything downstream — implement, the reviewer/adversary/codex cycle, and
+merge/PR — runs exactly as in ticket mode.
 
 ## Modes
 
@@ -71,7 +86,8 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_DEFAULT_ACTION` | `pr` | In `full` mode: what to do after review (`merge`/`pr`/`preview`/`hold`) |
 | `AUTOPILOT_WORKTREE_BASE` | `$HOME/wt` | Where worktrees live |
 | `AUTOPILOT_AGENT_CMD` | `claude -p --output-format=stream-json --model $AUTOPILOT_MODEL` | Coding-agent CLI. Reads prompt on stdin. |
-| `AUTOPILOT_MODEL` | `claude-opus-4-7` | Model passed to the agent |
+| `AUTOPILOT_CODEX_CMD` | `codex exec --json --full-auto` | Cross-review agent run each cycle between adversary and fixer. `--json` is rendered by `codex_pretty`. Skipped if binary absent; empty to disable. |
+| `AUTOPILOT_MODEL` | `claude-opus-4-8` | Model passed to the agent |
 | `AUTOPILOT_VERIFY_CMD` | `make check test` | Run at end of implement + after each fixer cycle |
 | `AUTOPILOT_SETUP_CMD` | (none) | Run inside fresh worktree (e.g. `pnpm install`) |
 | `AUTOPILOT_SYMLINKS` | (none) | Newline list of paths to symlink from source repo (`.env`, `.mcp.json`) |
@@ -95,6 +111,10 @@ Whichever agent you choose, it must have a Linear MCP server installed and authe
 ```
 worktree → research → plan → [checkpoint] → implement → review×3 → [checkpoint] → merge|pr|preview|hold
 ```
+
+Each `review` cycle runs reviewer → adversary → **codex cross-review** (if `codex` is on PATH) → fixer.
+
+[Plan-file mode](#plan-file-mode) enters the pipeline at `implement`, skipping `worktree`'s Linear fetch plus the `research`, `plan`, and plan-`[checkpoint]` steps.
 
 Each phase writes a marker to `<worktree>/.autopilot/state.json`. Re-running the entry script skips completed phases.
 
@@ -179,6 +199,11 @@ The pipeline (state machine, phases, checkpoints, review cycle) is agent-agnosti
 ### Agent-agnostic mode
 
 Add `AUTOPILOT_AGENT=claude|codex|aider` that picks the right defaults so users don't hand-craft every flag.
+
+The agent-profile seam (`lib/agent.sh::agent_cmd_for` / `agent_filter_for`) already
+dispatches command + output filter by profile name (`primary`, `cross`). Extending it to
+a full `AUTOPILOT_AGENT=claude|codex|aider` selector for the *primary* agent is the
+natural next step.
 
 - **Pretty filter** (`lib/agent.sh::agent_pretty`) — currently parses Claude's `stream-json` schema (`{"type":"assistant","message":{"content":[...]}}`). Non-JSON lines already pass through verbatim, so dropping `--output-format=stream-json` from `AUTOPILOT_AGENT_CMD` gives you the agent's native streaming UI for free. A proper fix is per-agent filters dispatched by the new env var.
 - **Permission flag** — `--permission-mode bypassPermissions` is Claude-Code syntax. Codex uses `--full-auto`; aider auto-approves by default.

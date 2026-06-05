@@ -22,6 +22,8 @@ source "$AUTOPILOT_ROOT/lib/phases.sh"
 source "$AUTOPILOT_ROOT/lib/state.sh"
 # shellcheck source=../lib/linear.sh
 source "$AUTOPILOT_ROOT/lib/linear.sh"
+# shellcheck source=../lib/plan.sh
+source "$AUTOPILOT_ROOT/lib/plan.sh"
 # shellcheck source=../lib/agent.sh
 source "$AUTOPILOT_ROOT/lib/agent.sh"
 # shellcheck source=../lib/checkpoint.sh
@@ -35,13 +37,23 @@ source "$AUTOPILOT_ROOT/lib/phase06.sh"
 
 usage() {
   cat <<EOF
-Usage: autopilot [--interactive | --full] <linear-url-or-id>
+Usage: autopilot [--interactive | --full] <linear-url-or-id | plan-file.md>
 
 Runs the ralph-loop from worktree creation through merge. Resumable: re-run to
 continue from the last completed phase.
 
+Two input forms:
+  <linear-url-or-id>   Full pipeline: fetch ticket, research, plan, implement,
+                       review, merge.
+  <plan-file.md>       Plan-file mode: skip the Linear fetch, research, and plan
+                       phases. Creates a worktree, seeds it with the supplied
+                       plan, and resumes at the implement phase. Detected when the
+                       argument ends in .md or names an existing file.
+
 Modes:
   --interactive (default)   Pause at plan TLDR and post-review checkpoints.
+                            (Plan-file mode skips the plan checkpoint — the plan
+                            is already yours — but keeps the post-review one.)
   --full                    No checkpoints. Auto-approves plan; takes
                             AUTOPILOT_DEFAULT_ACTION (default 'pr') after review.
 
@@ -50,7 +62,7 @@ Env vars (see .autopilotrc.example):
   AUTOPILOT_DEFAULT_ACTION  merge | pr | preview | hold (full mode only; default pr)
   AUTOPILOT_WORKTREE_BASE   Default: \$HOME/wt
   AUTOPILOT_AGENT_CMD       Default: claude -p ...
-  AUTOPILOT_MODEL           Default: claude-opus-4-7
+  AUTOPILOT_MODEL           Default: claude-opus-4-8
   AUTOPILOT_VERIFY_CMD      Default: make check test
   AUTOPILOT_SETUP_CMD       Default: (none)
   AUTOPILOT_SYMLINKS        Newline-separated paths to symlink from source repo
@@ -73,23 +85,45 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ $# -lt 1 ]] && { usage; exit 2; }
-LINEAR_INPUT="$1"
+INPUT="$1"
 [[ -n "$MODE_OVERRIDE" ]] && AUTOPILOT_MODE="$MODE_OVERRIDE"
 : "${AUTOPILOT_MODE:=interactive}"
 : "${AUTOPILOT_DEFAULT_ACTION:=pr}"
 export AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION
 log_info "Mode: $AUTOPILOT_MODE"
 
-SOURCE_REPO="$(pwd)"
-[[ -d "$SOURCE_REPO/.git" ]] || { log_err "Run from inside a git repo"; exit 1; }
+# Resolve the repo root from wherever we're invoked. `git rev-parse` handles
+# subdirectories and linked worktrees (where .git is a file, not a directory) —
+# an `-d .git` test would reject both. CWD is kept separately so a relative plan
+# path resolves against the caller's directory, not the repo root.
+CWD="$(pwd)"
+SOURCE_REPO="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$SOURCE_REPO" ]] || { log_err "Run from inside a git repo (cwd: $CWD)"; exit 1; }
 
 config_load
 
-TICKET=$(linear_parse_ticket "$LINEAR_INPUT") || { log_err "Bad Linear input"; exit 1; }
-SLUG=$(linear_parse_slug "$LINEAR_INPUT")
-PROJECT=$(config_project_name)
-TICKET_LC=$(echo "$TICKET" | tr '[:upper:]' '[:lower:]')
-WT="${AUTOPILOT_WORKTREE_BASE}/${PROJECT}/${TICKET_LC}"
+# Two input forms: a Linear URL/ID (full pipeline) or a plan file (skip the
+# Linear fetch, research, and plan phases). See is_plan_input in lib/plan.sh.
+PLAN_MODE=0
+if is_plan_input "$INPUT"; then
+  PLAN_MODE=1
+  PLAN_SRC="$INPUT"
+  [[ "$PLAN_SRC" = /* ]] || PLAN_SRC="$CWD/$PLAN_SRC"
+  [[ -f "$PLAN_SRC" ]] || { log_err "Plan file not found: $PLAN_SRC"; exit 1; }
+  SLUG=$(plan_slug "$PLAN_SRC")
+  TICKET="$SLUG"
+  TICKET_LC="$SLUG"
+  PROJECT=$(config_project_name)
+  WT="${AUTOPILOT_WORKTREE_BASE}/${PROJECT}/${SLUG}"
+  export PLAN_SRC
+  log_info "Plan-file mode: $PLAN_SRC"
+else
+  TICKET=$(linear_parse_ticket "$INPUT") || { log_err "Bad Linear input"; exit 1; }
+  SLUG=$(linear_parse_slug "$INPUT")
+  PROJECT=$(config_project_name)
+  TICKET_LC=$(echo "$TICKET" | tr '[:upper:]' '[:lower:]')
+  WT="${AUTOPILOT_WORKTREE_BASE}/${PROJECT}/${TICKET_LC}"
+fi
 export TICKET SLUG PROJECT WT TICKET_LC
 
 # Marker file so a shell wrapper can `cd` after we exit. See README "Auto-cd".
@@ -97,37 +131,67 @@ state_write_last_wt "$WT"
 
 set_term_title "$TICKET"
 trap 'set_term_title "$TICKET · done"' EXIT
-
-if need worktree_done; then
-  phase01_worktree "$LINEAR_INPUT" "$SOURCE_REPO"
-  mark_phase worktree_done
-fi
+# A Ctrl-C (or kill) must abort the run WITHOUT advancing state. Without this,
+# the agent CLI catches SIGINT and exits 0, which would otherwise look like a
+# successful phase and get marked done — silently skipping real work on resume.
+trap 'log_err "Interrupted — stopping. State not advanced; re-run to resume this phase."; exit 130' INT TERM
 
 DATE=$(date -u +%F)
 export DATE
 
-if need research_done; then run_phase 02-research && mark_phase research_done; fi
+if [[ "$PLAN_MODE" -eq 1 ]]; then
+  # Plan-file mode: create+seed the worktree, then jump straight to implement.
+  # The supplied plan is pre-approved, so there is no plan checkpoint.
+  if need plan_approved; then
+    plan_setup_worktree "$PLAN_SRC" "$SOURCE_REPO"
+    mark_phase plan_approved
+  fi
+else
+  if need worktree_done; then
+    phase01_worktree "$INPUT" "$SOURCE_REPO"
+    mark_phase worktree_done
+  fi
 
-if need plan_done; then run_phase 03-plan && mark_phase plan_done; fi
+  if need research_done; then
+    run_phase 02-research || { log_err "research phase failed — stopping."; exit 1; }
+    mark_phase research_done
+  fi
 
-if need plan_approved; then
-  PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
-  export PLAN_PATH
-  checkpoint_plan "$WT/$PLAN_PATH"
-  mark_phase plan_approved
+  if need plan_done; then
+    run_phase 03-plan || { log_err "plan phase failed — stopping."; exit 1; }
+    mark_phase plan_done
+  fi
+
+  if need plan_approved; then
+    PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
+    export PLAN_PATH
+    checkpoint_plan "$WT/$PLAN_PATH"
+    mark_phase plan_approved
+  fi
 fi
 
 if need implement_done; then
   PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
   export PLAN_PATH
   export VERIFY_CMD="$AUTOPILOT_VERIFY_CMD"
-  run_phase 04-implement && mark_phase implement_done
+  run_phase 04-implement || { log_err "implement phase failed — stopping."; exit 1; }
+  # Guard: implement must produce real work. If it exits 0 but leaves zero commits
+  # over the base (e.g. the agent was interrupted and the CLI exited cleanly), do
+  # NOT mark it done — otherwise resume skips ahead and review runs an empty diff.
+  impl_main=$(default_branch "$WT")
+  impl_commits=$(git -C "$WT" rev-list --count "origin/${impl_main}..HEAD" 2>/dev/null || echo 0)
+  if [[ "$impl_commits" -lt 1 ]]; then
+    log_err "implement finished with 0 commits over origin/${impl_main} — likely interrupted or incomplete. Not advancing; re-run to retry."
+    exit 1
+  fi
+  mark_phase implement_done
 fi
 
 for n in 1 2 3; do
   marker="review_cycle_${n}_done"
   if need "$marker"; then
-    run_review_cycle "$n" && mark_phase "$marker"
+    run_review_cycle "$n" || { log_err "review cycle $n failed — stopping."; exit 1; }
+    mark_phase "$marker"
   fi
 done
 
@@ -142,7 +206,8 @@ fi
 if need merged; then
   PLAN_PATH=$(jq -r .plan_path "$WT/.autopilot/state.json")
   export PLAN_PATH
-  phase06_merge_or_pr && mark_phase merged
+  phase06_merge_or_pr || { log_err "merge/pr phase failed — stopping."; exit 1; }
+  mark_phase merged
 fi
 
 TOTAL_COST=$(state_total_cost)

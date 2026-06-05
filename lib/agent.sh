@@ -1,6 +1,31 @@
 #!/usr/bin/env bash
 # Agent invocation wrapper. Requires: $WT, $AUTOPILOT_AGENT_CMD, lib/ui.sh sourced.
 
+# Agent profiles: resolve a command + output filter by profile name. This is the
+# bash-3.2-safe seam the README's reserved AUTOPILOT_AGENT=claude|codex|aider work
+# will grow into (no associative arrays). Today: "primary" (Claude) and "cross" (Codex).
+agent_cmd_for() {
+  case "$1" in
+    cross) printf '%s' "$AUTOPILOT_CODEX_CMD" ;;
+    *)     printf '%s' "$AUTOPILOT_AGENT_CMD" ;;
+  esac
+}
+
+agent_filter_for() {
+  case "$1" in
+    cross) printf 'codex_pretty' ;; # Codex --json JSONL → human-readable
+    *)     printf 'agent_pretty' ;; # Claude stream-json → human-readable
+  esac
+}
+
+# codex_available: true when the cross-review command is configured AND its binary
+# resolves on PATH. Empty AUTOPILOT_CODEX_CMD disables the pass even if codex exists.
+codex_available() {
+  [[ -n "${AUTOPILOT_CODEX_CMD:-}" ]] || return 1
+  local first="${AUTOPILOT_CODEX_CMD%% *}"
+  command -v "$first" >/dev/null 2>&1
+}
+
 # agent_pretty: stream Claude stream-json on stdin → human-readable lines on stdout.
 # Non-JSON lines pass through verbatim.
 agent_pretty() {
@@ -49,6 +74,52 @@ agent_pretty() {
   done
 }
 
+# codex_pretty: stream codex `exec --json` JSONL on stdin → human-readable lines.
+# Codex's event schema differs from Claude's: thread.started / turn.* envelopes
+# and item.started|completed wrapping {agent_message, command_execution,
+# reasoning}. Non-JSON status lines (e.g. "Reading prompt from stdin...") pass
+# through verbatim.
+codex_pretty() {
+  while IFS= read -r line; do
+    case "$line" in
+      '{'*)
+        printf '%s\n' "$line" | jq -rj \
+          --arg cyan "$(printf '\033[36m')" \
+          --arg cyan_b "$(printf '\033[1;36m')" \
+          --arg green "$(printf '\033[32m')" \
+          --arg green_b "$(printf '\033[1;32m')" \
+          --arg red "$(printf '\033[31m')" \
+          --arg dim "$(printf '\033[2m')" \
+          --arg reset "$(printf '\033[0m')" '
+          if (.type == "item.started" or .type == "item.completed") then
+            (.item // {}) as $it
+            | if $it.type == "command_execution" then
+                if .type == "item.started" then
+                  "  \($cyan_b)→\($reset) \($cyan)\($it.command // "")\($reset)\n"
+                elif ($it.exit_code != null and $it.exit_code != 0) then
+                  "  \($red)exit \($it.exit_code)\($reset)\n"
+                else "" end
+              elif $it.type == "agent_message" then
+                if .type == "item.completed" then (($it.text // "") + "\n") else "" end
+              elif $it.type == "reasoning" then
+                if (.type == "item.completed" and (($it.text // "") != "")) then
+                  "  \($dim)\($it.text)\($reset)\n"
+                else "" end
+              else "" end
+          elif .type == "turn.completed" then
+            "\n\($green_b)[done]\($reset) \($green)tokens in=\(.usage.input_tokens // "?") out=\(.usage.output_tokens // "?")\($reset)\n"
+          elif .type == "thread.started" then
+            "  \($dim)[codex thread \((.thread_id // "")[0:8])]\($reset)\n"
+          else empty end
+        ' 2>/dev/null || true
+        ;;
+      *)
+        printf '%s\n' "$line"
+        ;;
+    esac
+  done
+}
+
 # render_prompt <prompt_template> <out_file>
 # Substitutes {{VAR}} placeholders from current env into a prompt file.
 render_prompt() {
@@ -57,9 +128,13 @@ render_prompt() {
   sed -E 's/\{\{([A-Z_][A-Z0-9_]*)\}\}/\$\{\1\}/g' "$tmpl" | envsubst > "$out"
 }
 
-# run_phase <phase_name>
+# run_phase <phase_name> [<profile>]
 run_phase() {
   local name="$1"
+  local profile="${2:-primary}"
+  local cmd filter
+  cmd="$(agent_cmd_for "$profile")"
+  filter="$(agent_filter_for "$profile")"
   local repo_root="${AUTOPILOT_ROOT}"
   local tmpl="${repo_root}/prompts/${name}.md"
   local rendered="${WT}/.autopilot/prompts/${name}.md"
@@ -68,13 +143,12 @@ run_phase() {
   mkdir -p "${WT}/.autopilot/prompts" "${WT}/.autopilot/logs"
   render_prompt "$tmpl" "$rendered" || return 1
 
-  log_info "Phase ${name} → ${AUTOPILOT_AGENT_CMD%% *}"
+  log_info "Phase ${name} → ${cmd%% *}"
   set_term_title "${TICKET:-autopilot} · ${name}"
-  # Full raw JSON goes to log; terminal sees only filtered human-readable lines.
-  # shellcheck disable=SC2086
-  ( cd "$WT" && eval $AUTOPILOT_AGENT_CMD ) < "$rendered" 2>&1 \
+  # Full raw output goes to log; terminal sees only the profile's filtered view.
+  ( cd "$WT" && eval "$cmd" ) < "$rendered" 2>&1 \
     | tee "$logf" \
-    | agent_pretty
+    | "$filter"
   local rc="${PIPESTATUS[0]}"
   if [[ "$rc" -ne 0 ]]; then
     log_err "Phase ${name} exited ${rc}. Log: ${logf}"
