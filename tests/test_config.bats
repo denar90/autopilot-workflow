@@ -37,14 +37,14 @@ EOF
   [ "${AUTOPILOT_WORKTREE_BASE}" = "/override" ]
 }
 
-@test "config_load defaults AUTOPILOT_MODEL to the latest Opus" {
+@test "config_load defaults AUTOPILOT_MODEL to the latest GA model" {
   config_load
-  [ "${AUTOPILOT_MODEL}" = "claude-opus-4-8" ]
+  [ "${AUTOPILOT_MODEL}" = "claude-fable-5" ]
 }
 
 @test "config_load threads AUTOPILOT_MODEL into AUTOPILOT_AGENT_CMD" {
   config_load
-  [[ "${AUTOPILOT_AGENT_CMD}" == *"claude-opus-4-8"* ]]
+  [[ "${AUTOPILOT_AGENT_CMD}" == *"claude-fable-5"* ]]
 }
 
 @test "config_load defaults AUTOPILOT_CODEX_CMD to a codex invocation" {

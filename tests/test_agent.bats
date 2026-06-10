@@ -109,10 +109,10 @@ setup() {
 }
 
 @test "agent_pretty prints init session header" {
-  json='{"type":"system","subtype":"init","session_id":"abc12345-def-ghi","model":"claude-opus-4-8"}'
+  json='{"type":"system","subtype":"init","session_id":"abc12345-def-ghi","model":"claude-fable-5"}'
   out=$(printf '%s\n' "$json" | agent_pretty | sed $'s/\x1b\\[[0-9;]*m//g')
   [[ "$out" == *"[session abc12345]"* ]]
-  [[ "$out" == *"model=claude-opus-4-8"* ]]
+  [[ "$out" == *"model=claude-fable-5"* ]]
 }
 
 @test "agent_pretty prints result summary" {
@@ -143,7 +143,7 @@ setup() {
 
 @test "agent_pretty handles a mixed multi-line stream" {
   out=$(cat <<'EOF' | agent_pretty | sed $'s/\x1b\\[[0-9;]*m//g'
-{"type":"system","subtype":"init","session_id":"abc12345","model":"claude-opus-4-8"}
+{"type":"system","subtype":"init","session_id":"abc12345","model":"claude-fable-5"}
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/a.ts"}}]}}
 {"type":"system","subtype":"task_progress","description":"Reading /a.ts"}
 {"type":"assistant","message":{"content":[{"type":"text","text":"All done."}]}}

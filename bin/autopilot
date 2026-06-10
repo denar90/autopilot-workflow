@@ -62,7 +62,7 @@ Env vars (see .autopilotrc.example):
   AUTOPILOT_DEFAULT_ACTION  merge | pr | preview | hold (full mode only; default pr)
   AUTOPILOT_WORKTREE_BASE   Default: \$HOME/wt
   AUTOPILOT_AGENT_CMD       Default: claude -p ...
-  AUTOPILOT_MODEL           Default: claude-opus-4-8
+  AUTOPILOT_MODEL           Default: claude-fable-5
   AUTOPILOT_VERIFY_CMD      Default: make check test
   AUTOPILOT_SETUP_CMD       Default: (none)
   AUTOPILOT_SYMLINKS        Newline-separated paths to symlink from source repo

@@ -4,8 +4,9 @@
 # Where worktrees live. Each worktree is "${AUTOPILOT_WORKTREE_BASE}/${project}/${ticket}".
 : "${AUTOPILOT_WORKTREE_BASE:=$HOME/wt}"
 
-# Default model passed to the agent.
-: "${AUTOPILOT_MODEL:=claude-opus-4-8}"
+# Default model passed to the agent. claude-fable-5 is the most capable generally
+# available model. Set claude-mythos-5 if you have Project Glasswing access.
+: "${AUTOPILOT_MODEL:=claude-fable-5}"
 
 # Coding agent invocation. Stdin = prompt, stdout = stream.
 : "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
