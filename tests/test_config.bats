@@ -47,6 +47,23 @@ EOF
   [[ "${AUTOPILOT_AGENT_CMD}" == *"claude-fable-5"* ]]
 }
 
+@test "config_load defaults AUTOPILOT_MODEL_REVIEW to a cheaper model than the primary" {
+  config_load
+  [ "${AUTOPILOT_MODEL_REVIEW}" = "claude-opus-4-8" ]
+}
+
+@test "config_load threads AUTOPILOT_MODEL_REVIEW into AUTOPILOT_AGENT_CMD_REVIEW" {
+  config_load
+  [[ "${AUTOPILOT_AGENT_CMD_REVIEW}" == *"claude-opus-4-8"* ]]
+}
+
+@test "config_load preserves caller-set AUTOPILOT_MODEL_REVIEW" {
+  export AUTOPILOT_MODEL_REVIEW="claude-haiku-4-5"
+  config_load
+  [ "${AUTOPILOT_MODEL_REVIEW}" = "claude-haiku-4-5" ]
+  [[ "${AUTOPILOT_AGENT_CMD_REVIEW}" == *"claude-haiku-4-5"* ]]
+}
+
 @test "config_load defaults AUTOPILOT_CODEX_CMD to a codex invocation" {
   config_load
   [ "${AUTOPILOT_CODEX_CMD}" = "codex exec --json --full-auto" ]

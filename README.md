@@ -87,7 +87,8 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_WORKTREE_BASE` | `$HOME/wt` | Where worktrees live |
 | `AUTOPILOT_AGENT_CMD` | `claude -p --output-format=stream-json --model $AUTOPILOT_MODEL` | Coding-agent CLI. Reads prompt on stdin. |
 | `AUTOPILOT_CODEX_CMD` | `codex exec --json --full-auto` | Cross-review agent run each cycle between adversary and fixer. `--json` is rendered by `codex_pretty`. Skipped if binary absent; empty to disable. |
-| `AUTOPILOT_MODEL` | `claude-fable-5` | Model passed to the agent. Most capable GA model; set `claude-mythos-5` with Project Glasswing access. |
+| `AUTOPILOT_MODEL` | `claude-fable-5` | Model for implement/plan/research. Most capable GA model; set `claude-mythos-5` with Project Glasswing access. |
+| `AUTOPILOT_MODEL_REVIEW` | `claude-opus-4-8` | Cheaper model for the review cycle (reviewer/adversary/fixer). Main cost lever — the 05x loop runs up to 3×/task. Try `claude-sonnet-4-6` to cut further. |
 | `AUTOPILOT_VERIFY_CMD` | `make check test` | Run at end of implement + after each fixer cycle |
 | `AUTOPILOT_SETUP_CMD` | (none) | Run inside fresh worktree (e.g. `pnpm install`) |
 | `AUTOPILOT_SYMLINKS` | (none) | Newline list of paths to symlink from source repo (`.env`, `.mcp.json`) |
@@ -224,7 +225,7 @@ Default worktree base is `$HOME/wt/<project>/<ticket>/`. Repos with their own wo
 
 ### Per-phase model overrides
 
-`AUTOPILOT_MODEL` applies uniformly. The design doc reserved `AUTOPILOT_MODEL_REVIEWER`, `AUTOPILOT_MODEL_ADVERSARY`, etc., for cost optimization (e.g., Haiku for reviewer/adversary, Opus only for plan/implement). Not wired yet.
+The review cycle is split off via `AUTOPILOT_MODEL_REVIEW` (default `claude-opus-4-8`): reviewer/adversary/fixer run on it through the agent-profile `review` seam, while implement/plan/research use `AUTOPILOT_MODEL`. Finer-grained per-phase knobs (`AUTOPILOT_MODEL_ADVERSARY`, etc.) are a natural extension of the same `agent_cmd_for` dispatcher.
 
 ### Testing gaps
 

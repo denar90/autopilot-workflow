@@ -5,6 +5,11 @@ config_load() {
   : "${AUTOPILOT_WORKTREE_BASE:=$HOME/wt}"
   : "${AUTOPILOT_MODEL:=claude-fable-5}"
   : "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
+  # Review-cycle phases (reviewer/adversary/fixer) run on a cheaper model than the
+  # primary implement/plan model — they critique and patch an existing diff, which
+  # doesn't need the frontier tier. This is the main cost lever for the 05x loop.
+  : "${AUTOPILOT_MODEL_REVIEW:=claude-opus-4-8}"
+  : "${AUTOPILOT_AGENT_CMD_REVIEW:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL_REVIEW}"
   : "${AUTOPILOT_CODEX_CMD:=codex exec --json --full-auto}"
   : "${AUTOPILOT_SETUP_CMD:=}"
   : "${AUTOPILOT_VERIFY_CMD:=make check test}"
@@ -18,6 +23,7 @@ config_load() {
   fi
 
   export AUTOPILOT_WORKTREE_BASE AUTOPILOT_MODEL AUTOPILOT_AGENT_CMD \
+         AUTOPILOT_MODEL_REVIEW AUTOPILOT_AGENT_CMD_REVIEW \
          AUTOPILOT_CODEX_CMD \
          AUTOPILOT_SETUP_CMD AUTOPILOT_VERIFY_CMD AUTOPILOT_SYMLINKS \
          AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION

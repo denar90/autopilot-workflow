@@ -6,8 +6,9 @@
 # will grow into (no associative arrays). Today: "primary" (Claude) and "cross" (Codex).
 agent_cmd_for() {
   case "$1" in
-    cross) printf '%s' "$AUTOPILOT_CODEX_CMD" ;;
-    *)     printf '%s' "$AUTOPILOT_AGENT_CMD" ;;
+    cross)  printf '%s' "$AUTOPILOT_CODEX_CMD" ;;
+    review) printf '%s' "$AUTOPILOT_AGENT_CMD_REVIEW" ;; # cheaper model for the 05x loop
+    *)      printf '%s' "$AUTOPILOT_AGENT_CMD" ;;
   esac
 }
 

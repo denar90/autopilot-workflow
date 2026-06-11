@@ -31,8 +31,8 @@ run_review_cycle() {
 
   export CYCLE="$n" BASE_SHA="$base" HEAD_SHA="$head"
 
-  run_phase 05a-reviewer  || return 1
-  run_phase 05b-adversary || return 1
+  run_phase 05a-reviewer  review || return 1
+  run_phase 05b-adversary review || return 1
 
   if codex_available; then
     local fb="$WT/.autopilot/feedback.json"
@@ -49,5 +49,5 @@ run_review_cycle() {
     log_warn "codex not on PATH; skipping cross-review (set/clear AUTOPILOT_CODEX_CMD to control)"
   fi
 
-  run_phase 05c-fixer     || return 1
+  run_phase 05c-fixer     review || return 1
 }

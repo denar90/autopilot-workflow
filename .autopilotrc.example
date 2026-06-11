@@ -11,6 +11,13 @@
 # Coding agent invocation. Stdin = prompt, stdout = stream.
 : "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
 
+# Cheaper model for the review cycle (reviewer/adversary/fixer). The 05x loop runs
+# up to 3× per task and is the biggest cost driver; critiquing/patching an existing
+# diff doesn't need the frontier model. claude-opus-4-8 is ~half the cost of fable-5;
+# claude-sonnet-4-6 or claude-haiku-4-5 are cheaper still.
+: "${AUTOPILOT_MODEL_REVIEW:=claude-opus-4-8}"
+: "${AUTOPILOT_AGENT_CMD_REVIEW:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL_REVIEW}"
+
 # Cross-review agent (a second model that reviews after Claude's reviewer/adversary,
 # before the fixer). Runs every review cycle. Stdin = prompt. Leave empty to disable
 # even when codex is installed. Skipped automatically if the binary isn't on PATH.
