@@ -187,10 +187,21 @@ if need implement_done; then
   mark_phase implement_done
 fi
 
+# Up to 3 review cycles, but stop early once a cycle converges (its finder pass —
+# reviewer + adversary + codex — leaves nothing open, so the fixer is skipped).
 for n in 1 2 3; do
   marker="review_cycle_${n}_done"
   if need "$marker"; then
-    run_review_cycle "$n" || { log_err "review cycle $n failed — stopping."; exit 1; }
+    rc=0
+    run_review_cycle "$n" || rc=$?
+    if [[ "$rc" -eq "$REVIEW_CONVERGED" ]]; then
+      log_ok "Review converged at cycle $n — skipping remaining cycles."
+      mark_phase review_cycle_3_done   # advance past all cycle markers; resume-safe
+      break
+    elif [[ "$rc" -ne 0 ]]; then
+      log_err "review cycle $n failed — stopping."
+      exit 1
+    fi
     mark_phase "$marker"
   fi
 done

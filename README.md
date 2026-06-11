@@ -110,10 +110,10 @@ Whichever agent you choose, it must have a Linear MCP server installed and authe
 ## Phase order
 
 ```
-worktree → research → plan → [checkpoint] → implement → review×3 → [checkpoint] → merge|pr|preview|hold
+worktree → research → plan → [checkpoint] → implement → review×≤3 → [checkpoint] → merge|pr|preview|hold
 ```
 
-Each `review` cycle runs reviewer → adversary → **codex cross-review** (if `codex` is on PATH) → fixer.
+Each `review` cycle runs a finder pass — reviewer → adversary → **codex cross-review** (if `codex` is on PATH) — then the fixer. **Early-exit:** if a finder pass leaves no `open` findings, the fixer is skipped and the loop stops (converged), so a clean change costs one finder pass instead of three full cycles. Codex is part of the finder pass, so it must also come up empty before the loop exits. Review phases run on the cheaper `AUTOPILOT_MODEL_REVIEW`.
 
 [Plan-file mode](#plan-file-mode) enters the pipeline at `implement`, skipping `worktree`'s Linear fetch plus the `research`, `plan`, and plan-`[checkpoint]` steps.
 
