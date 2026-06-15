@@ -29,9 +29,8 @@ feedback_restore_if_corrupt() {
 # run_review_cycle <N>
 run_review_cycle() {
   local n="$1"
-  local base head main_branch
-  main_branch=$(default_branch "$WT")
-  base=$(git -C "$WT" merge-base "origin/$main_branch" HEAD)
+  local base head
+  base=$(git -C "$WT" merge-base "$(base_ref "$WT")" HEAD)
   head=$(git -C "$WT" rev-parse HEAD)
 
   local tmp

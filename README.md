@@ -117,6 +117,8 @@ Each `review` cycle runs a finder pass — reviewer → adversary → **codex cr
 
 [Plan-file mode](#plan-file-mode) enters the pipeline at `implement`, skipping `worktree`'s Linear fetch plus the `research`, `plan`, and plan-`[checkpoint]` steps.
 
+**Local-only repos** (no `origin` remote) work too: the worktree branches from the local default branch (`main`/`master`/current), review diffs against it, and the final `merge`/`pr`/`preview` is skipped — the work is left committed on its branch for you to push or merge manually once a remote exists.
+
 Each phase writes a marker to `<worktree>/.autopilot/state.json`. Re-running the entry script skips completed phases.
 
 ## Resuming after interruption

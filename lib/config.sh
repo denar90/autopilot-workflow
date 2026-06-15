@@ -40,18 +40,42 @@ config_project_name() {
   fi
 }
 
+# remote_exists [<repo-dir>] — true when an `origin` remote is configured.
+# Autopilot works on local-only repos (no remote): worktrees branch from the
+# local default branch and the final push/PR is skipped.
+remote_exists() {
+  git -C "${1:-$PWD}" remote get-url origin >/dev/null 2>&1
+}
+
 # default_branch [<repo-dir>]
-# Returns the remote's default branch (main, master, trunk, etc.), determined
-# by `git symbolic-ref refs/remotes/origin/HEAD`. Falls back to `main` if
-# origin/HEAD isn't set (rare — most clones have it). Pass a repo dir or rely
-# on $PWD.
+# Returns the default branch (main, master, trunk, etc.). With an origin remote
+# it uses `git symbolic-ref refs/remotes/origin/HEAD`. For a local-only repo it
+# falls back to a local `main`/`master`, then the current branch. Pass a repo dir
+# or rely on $PWD.
 default_branch() {
   local repo="${1:-$PWD}" b
   b=$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@') || true
-  if [[ -z "$b" ]]; then
+  if [[ -z "$b" ]] && remote_exists "$repo"; then
     # Try refreshing origin/HEAD from the remote (one-time cost per worktree).
     git -C "$repo" remote set-head origin --auto >/dev/null 2>&1 || true
     b=$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@') || true
   fi
+  if [[ -z "$b" ]]; then
+    # No origin/HEAD (local-only repo): prefer a local main/master, else the
+    # current branch.
+    if git -C "$repo" show-ref --verify --quiet refs/heads/main; then b=main
+    elif git -C "$repo" show-ref --verify --quiet refs/heads/master; then b=master
+    else b=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null) || true; fi
+  fi
   echo "${b:-main}"
+}
+
+# base_ref [<repo-dir>] — the ref new work branches from and review diffs against.
+# `origin/<default-branch>` when an origin remote exists, otherwise the local
+# `<default-branch>`. Centralizes the remote-vs-local choice for worktree creation,
+# review base, and commit counting.
+base_ref() {
+  local repo="${1:-$PWD}" b
+  b=$(default_branch "$repo")
+  if remote_exists "$repo"; then printf 'origin/%s' "$b"; else printf '%s' "$b"; fi
 }

@@ -87,3 +87,57 @@ EOF
   run config_project_name
   [ -n "$output" ]
 }
+
+# --- remote_exists / local-repo support ---------------------------------------
+
+@test "remote_exists is false without an origin remote" {
+  git init -q
+  run remote_exists
+  [ "$status" -ne 0 ]
+}
+
+@test "remote_exists is true with an origin remote" {
+  git init -q
+  git remote add origin git@github.com:foo/bar.git
+  run remote_exists
+  [ "$status" -eq 0 ]
+}
+
+# portable git init on an explicit initial branch (git < 2.28 has no `init -b`)
+_git_init_on() {
+  git init -q
+  git symbolic-ref HEAD "refs/heads/$1"
+  git config user.email t@t.t; git config user.name t
+  git commit -q --allow-empty -m init
+}
+
+@test "default_branch falls back to local main without an origin remote" {
+  _git_init_on main
+  run default_branch
+  [ "$output" = "main" ]
+}
+
+@test "default_branch uses local master when that is the default and no origin" {
+  _git_init_on master
+  run default_branch
+  [ "$output" = "master" ]
+}
+
+@test "default_branch uses the current branch when no origin and no main/master" {
+  _git_init_on dev
+  run default_branch
+  [ "$output" = "dev" ]
+}
+
+@test "base_ref is the local default branch without an origin remote" {
+  _git_init_on main
+  run base_ref
+  [ "$output" = "main" ]
+}
+
+@test "base_ref is origin-qualified when an origin remote exists" {
+  _git_init_on main
+  git remote add origin git@github.com:foo/bar.git
+  run base_ref
+  [ "$output" = "origin/main" ]
+}

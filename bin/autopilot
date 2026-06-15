@@ -178,10 +178,10 @@ if need implement_done; then
   # Guard: implement must produce real work. If it exits 0 but leaves zero commits
   # over the base (e.g. the agent was interrupted and the CLI exited cleanly), do
   # NOT mark it done — otherwise resume skips ahead and review runs an empty diff.
-  impl_main=$(default_branch "$WT")
-  impl_commits=$(git -C "$WT" rev-list --count "origin/${impl_main}..HEAD" 2>/dev/null || echo 0)
+  impl_base=$(base_ref "$WT")
+  impl_commits=$(git -C "$WT" rev-list --count "${impl_base}..HEAD" 2>/dev/null || echo 0)
   if [[ "$impl_commits" -lt 1 ]]; then
-    log_err "implement finished with 0 commits over origin/${impl_main} — likely interrupted or incomplete. Not advancing; re-run to retry."
+    log_err "implement finished with 0 commits over ${impl_base} — likely interrupted or incomplete. Not advancing; re-run to retry."
     exit 1
   fi
   mark_phase implement_done
@@ -208,8 +208,7 @@ done
 
 if need review_approved; then
   branch=$(jq -r .branch "$WT/.autopilot/state.json")
-  main_branch=$(default_branch "$WT")
-  commits=$(git -C "$WT" rev-list --count "origin/$main_branch..HEAD")
+  commits=$(git -C "$WT" rev-list --count "$(base_ref "$WT")..HEAD")
   checkpoint_review "$branch" "$commits"
   mark_phase review_approved
 fi
