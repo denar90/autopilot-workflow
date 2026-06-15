@@ -4,9 +4,11 @@
 # Where worktrees live. Each worktree is "${AUTOPILOT_WORKTREE_BASE}/${project}/${ticket}".
 : "${AUTOPILOT_WORKTREE_BASE:=$HOME/wt}"
 
-# Default model passed to the agent. claude-fable-5 is the most capable generally
-# available model. Set claude-mythos-5 if you have Project Glasswing access.
-: "${AUTOPILOT_MODEL:=claude-fable-5}"
+# Default model for implement/plan/research. claude-opus-4-8 is the top Opus-tier
+# model ($5/$25 per MTok) — strong agentic coding at a much lower cost than the
+# frontier claude-fable-5 ($10/$50). Set claude-fable-5 (or claude-mythos-5 with
+# Project Glasswing access) if you want maximum capability and accept the cost.
+: "${AUTOPILOT_MODEL:=claude-opus-4-8}"
 
 # Coding agent invocation. Stdin = prompt, stdout = stream.
 : "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
