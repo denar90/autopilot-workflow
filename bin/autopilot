@@ -221,4 +221,8 @@ if need merged; then
 fi
 
 TOTAL_COST=$(state_total_cost)
-log_ok "Autopilot done for $TICKET. Phase: $(state_phase). Total cost: \$$(printf '%.4f' "$TOTAL_COST")."
+FINAL_BRANCH=$(jq -r '.branch // "?"' "$WT/.autopilot/state.json" 2>/dev/null || echo "?")
+log_ok "Autopilot done for $TICKET (phase: $(state_phase))."
+echo "  Worktree: $WT"
+echo "  Branch:   $FINAL_BRANCH"
+echo "  Cost:     \$$(printf '%.4f' "$TOTAL_COST")"
