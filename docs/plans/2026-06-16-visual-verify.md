@@ -17,6 +17,7 @@
 ## Constraints / what already exists
 - `feedback.json` items use `status` ∈ open/fixed/dropped_by_adversary/wontfix; `feedback_open_count` (lib/review.sh) is the convergence signal; the fixer (`05c-fixer`) fixes `open` items.
 - Acceptance criteria source: `.autopilot/ticket.json` `.description` (Linear) in ticket mode; the plan at `state.plan_path` in plan-file mode.
+- **Reference images:** `linear_fetch_via_api` currently fetches text only (`identifier/title/description/url/state/team`). Design mockups/screenshots in a Linear ticket (description-embedded `uploads.linear.app` images, or `attachments`) are NOT captured — so visual-verify has no baseline to compare against. Task 1b closes this.
 - Phase ladder is `lib/phases.sh::_AUTOPILOT_PHASES`; markers gate via `need`/`mark_phase`.
 - Review phases run on `AUTOPILOT_MODEL_REVIEW` via the `review` agent profile.
 
@@ -28,6 +29,15 @@
 - Tests (`tests/test_config.bats`): default `auto`; caller override preserved; `visual_enabled` false only for `off`.
 - `.autopilotrc.example`: document both.
 
+## Task 1b: Capture Linear acceptance images as comparison baselines
+- `lib/linear.sh`:
+  - Extend the GraphQL query in `linear_fetch_via_api` to include `attachments { nodes { url title } }`; keep `description`.
+  - `linear_extract_image_urls <ticket.json>` — pure helper: emit image URLs from the description markdown (`!\[...\]\(<url>\)`, `https://uploads.linear.app/...`) plus image-like attachment URLs. Unit-testable.
+  - `linear_fetch_criteria_images <ticket.json> <out-dir>` — download each URL with `curl -H "Authorization: $LINEAR_API_KEY" -L` into `<out-dir>`; write the local paths back into `ticket.json` as `.criteria_images`. Best-effort: a failed download is logged and skipped, never fatal. Figma/non-image links are recorded under `.criteria_links` for the agent to note, not downloaded.
+- `lib/phase01.sh`: after `linear_fetch`, call `linear_fetch_criteria_images "$WT/.autopilot/ticket.json" "$WT/.autopilot/criteria"`.
+- MCP fallback: the `01-worktree-fetch` prompt also instructs the agent to save any ticket images to `.autopilot/criteria/` (via the Linear MCP `extract_images`).
+- Tests (`tests/test_linear.bats`): `linear_extract_image_urls` pulls markdown + uploads URLs and ignores non-image links; tolerates a description with no images (empty output).
+
 ## Task 2: Phase-ladder slot `visual_verify_done`
 - `lib/phases.sh`: insert `visual_verify_done` between `review_cycle_3_done` and `review_approved`.
 - Tests (`tests/test_phases.bats`): ordering — `review_cycle_3_done` < `visual_verify_done` < `review_approved`.
@@ -35,10 +45,11 @@
 ## Task 3: Visual-verify prompt
 - Create `prompts/07-visual-verify.md`:
   - Verify cwd. Read acceptance criteria from `.autopilot/ticket.json` (`.description`) or the plan.
+  - **Load reference designs:** read any images listed in `.autopilot/ticket.json` `.criteria_images` (files under `.autopilot/criteria/`) as the comparison baseline, and note any `.criteria_links` (e.g. Figma) that couldn't be rendered. If there are none, verify against the textual criteria alone.
   - **Gate:** if `{{VISUAL_MODE}}` is `auto` and the diff `{{BASE_SHA}}..{{HEAD_SHA}}` has no user-facing UI change (no frontend files; criteria not visual), write a one-line "skipped — no UI" note to `.autopilot/visual-report.md` and exit without adding items. If `on`, always proceed.
   - Launch the app: use `{{APP_CMD}}` if set, else the project's run skill / dev script; wait for readiness; ensure teardown.
   - Drive the acceptance flows with the Playwright skill; save screenshots to `.autopilot/screenshots/`.
-  - For each unmet criterion append an `open` item (`source:"visual"`, `id:"cV-v-NNN"`, `detail` = criterion + screenshot path).
+  - For each unmet criterion append an `open` item (`source:"visual"`, `id:"cV-v-NNN"`, `detail` = criterion + screenshot path + reference-image path when one exists).
   - Write `.autopilot/visual-report.md` (each criterion: met/unmet + screenshot ref).
 - Verify placeholders render: `{{TICKET}} {{WT}} {{BASE_SHA}} {{HEAD_SHA}} {{VISUAL_MODE}} {{APP_CMD}}`.
 
