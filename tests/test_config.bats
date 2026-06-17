@@ -64,6 +64,28 @@ EOF
   [[ "${AUTOPILOT_AGENT_CMD_REVIEW}" == *"claude-haiku-4-5"* ]]
 }
 
+@test "config_load defaults AUTOPILOT_VISUAL to auto" {
+  config_load
+  [ "${AUTOPILOT_VISUAL}" = "auto" ]
+}
+
+@test "config_load defaults AUTOPILOT_APP_CMD to empty" {
+  config_load
+  [ -z "${AUTOPILOT_APP_CMD}" ]
+}
+
+@test "config_load preserves caller-set AUTOPILOT_VISUAL" {
+  export AUTOPILOT_VISUAL="off"
+  config_load
+  [ "${AUTOPILOT_VISUAL}" = "off" ]
+}
+
+@test "visual_enabled true for auto and on, false for off" {
+  AUTOPILOT_VISUAL=auto visual_enabled
+  AUTOPILOT_VISUAL=on   visual_enabled
+  ! AUTOPILOT_VISUAL=off visual_enabled
+}
+
 @test "config_load defaults AUTOPILOT_CODEX_CMD to a codex invocation" {
   config_load
   [ "${AUTOPILOT_CODEX_CMD}" = "codex exec --json --full-auto" ]

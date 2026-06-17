@@ -44,3 +44,12 @@ AUTOPILOT_VERIFY_CMD="make check test"
 # In 'full' mode, what to do after the 3 review cycles complete.
 # One of: merge / pr / preview / hold.
 : "${AUTOPILOT_DEFAULT_ACTION:=pr}"
+
+# Visual verification of UI tasks (runs after review converges, before merge).
+# auto = run, but the agent skips changes with no user-facing UI; on = always
+# verify; off = never run the phase.
+: "${AUTOPILOT_VISUAL:=auto}"
+
+# How the visual-verify phase launches the app. Leave empty to let the agent use
+# the project's run skill / dev script; or set an explicit command.
+AUTOPILOT_APP_CMD=""

@@ -16,6 +16,11 @@ config_load() {
   : "${AUTOPILOT_SYMLINKS:=}"
   : "${AUTOPILOT_MODE:=interactive}"
   : "${AUTOPILOT_DEFAULT_ACTION:=pr}"
+  # Visual verification: auto (run, but the agent skips non-UI work) | on (always) | off.
+  : "${AUTOPILOT_VISUAL:=auto}"
+  # Command to launch the app for visual verification. Empty → the agent uses the
+  # project's run skill / dev script.
+  : "${AUTOPILOT_APP_CMD:=}"
 
   if [[ -f .autopilotrc ]]; then
     # shellcheck disable=SC1091
@@ -26,7 +31,8 @@ config_load() {
          AUTOPILOT_MODEL_REVIEW AUTOPILOT_AGENT_CMD_REVIEW \
          AUTOPILOT_CODEX_CMD \
          AUTOPILOT_SETUP_CMD AUTOPILOT_VERIFY_CMD AUTOPILOT_SYMLINKS \
-         AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION
+         AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION \
+         AUTOPILOT_VISUAL AUTOPILOT_APP_CMD
 }
 
 config_project_name() {
@@ -78,4 +84,10 @@ base_ref() {
   local repo="${1:-$PWD}" b
   b=$(default_branch "$repo")
   if remote_exists "$repo"; then printf 'origin/%s' "$b"; else printf '%s' "$b"; fi
+}
+
+# visual_enabled — true unless AUTOPILOT_VISUAL=off. (`auto` and `on` both run the
+# phase; the auto-vs-on self-gate is decided inside the visual-verify prompt.)
+visual_enabled() {
+  [[ "${AUTOPILOT_VISUAL:-auto}" != "off" ]]
 }
