@@ -50,6 +50,9 @@ phase01_worktree() {
   fi
 
   linear_fetch "$ticket" "$WT/.autopilot/ticket.json"
+  # Pull any design mockups/screenshots referenced in the ticket so the
+  # visual-verify phase has a baseline to compare against (best-effort).
+  linear_fetch_criteria_images "$WT/.autopilot/ticket.json" "$WT/.autopilot/criteria" || true
 
   state_set ticket "$ticket"
   state_set worktree "$WT"
