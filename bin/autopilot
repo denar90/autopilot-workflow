@@ -206,6 +206,30 @@ for n in 1 2 3; do
   fi
 done
 
+# Visual verification (UI tasks): after code review converges, before the human
+# checkpoint. The prompt self-gates (skips non-UI work in `auto`); unmet criteria
+# become open items the fixer addresses, then we re-verify (bounded). A phase error
+# is advisory — it warns and continues to the checkpoint rather than aborting a
+# successful implement+review.
+if need visual_verify_done; then
+  if visual_enabled; then
+    VISUAL_MODE="$AUTOPILOT_VISUAL"
+    APP_CMD="$AUTOPILOT_APP_CMD"
+    BASE_SHA=$(git -C "$WT" merge-base "$(base_ref "$WT")" HEAD)
+    HEAD_SHA=$(git -C "$WT" rev-parse HEAD)
+    export VISUAL_MODE APP_CMD BASE_SHA HEAD_SHA
+    for v in 1 2; do
+      log_info "Visual verification pass ${v}/2"
+      run_phase 07-visual-verify review || { log_warn "visual-verify phase errored; continuing."; break; }
+      [[ "$(feedback_open_count "$WT/.autopilot/feedback.json")" -eq 0 ]] && break
+      run_phase 05c-fixer review || { log_err "visual fix phase failed — stopping."; exit 1; }
+    done
+  else
+    log_info "Visual verification disabled (AUTOPILOT_VISUAL=off)."
+  fi
+  mark_phase visual_verify_done
+fi
+
 if need review_approved; then
   branch=$(jq -r .branch "$WT/.autopilot/state.json")
   commits=$(git -C "$WT" rev-list --count "$(base_ref "$WT")..HEAD")
