@@ -21,6 +21,15 @@ teardown() {
   [ "${AUTOPILOT_DEFAULT_ACTION}" = "pr" ]
 }
 
+@test "config_load sources .autopilotrc from the repo root when run from a subdir" {
+  git init -q
+  echo 'AUTOPILOT_VERIFY_CMD="from-root"' > .autopilotrc
+  mkdir -p sub/deep
+  cd sub/deep
+  config_load
+  [ "${AUTOPILOT_VERIFY_CMD}" = "from-root" ]
+}
+
 @test "config_load sources local .autopilotrc when present" {
   cat > .autopilotrc <<EOF
 AUTOPILOT_WORKTREE_BASE="/tmp/custom-wt"

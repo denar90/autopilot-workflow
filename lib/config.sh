@@ -22,9 +22,14 @@ config_load() {
   # project's run skill / dev script.
   : "${AUTOPILOT_APP_CMD:=}"
 
-  if [[ -f .autopilotrc ]]; then
-    # shellcheck disable=SC1091
-    source .autopilotrc
+  # Load .autopilotrc from the repo root (so running from a subdirectory still
+  # picks it up), falling back to the current directory when not in a git repo.
+  local rc=".autopilotrc" top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || true
+  [[ -n "$top" && -f "$top/.autopilotrc" ]] && rc="$top/.autopilotrc"
+  if [[ -f "$rc" ]]; then
+    # shellcheck disable=SC1090,SC1091
+    source "$rc"
   fi
 
   export AUTOPILOT_WORKTREE_BASE AUTOPILOT_MODEL AUTOPILOT_AGENT_CMD \
