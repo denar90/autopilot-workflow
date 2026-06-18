@@ -87,8 +87,11 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_WORKTREE_BASE` | `$HOME/wt` | Where worktrees live |
 | `AUTOPILOT_AGENT_CMD` | `claude -p --output-format=stream-json --model $AUTOPILOT_MODEL` | Coding-agent CLI. Reads prompt on stdin. |
 | `AUTOPILOT_CODEX_CMD` | `codex exec --json --full-auto` | Cross-review agent run each cycle between adversary and fixer. `--json` is rendered by `codex_pretty`. Skipped if binary absent; empty to disable. |
-| `AUTOPILOT_MODEL` | `claude-opus-4-8` | Model passed to the agent |
+| `AUTOPILOT_MODEL` | `claude-opus-4-8` | Model for implement/plan/research. Top Opus-tier ($5/$25). Set `claude-fable-5` for the frontier model (2× cost), or `claude-mythos-5` with Project Glasswing access. |
+| `AUTOPILOT_MODEL_REVIEW` | `claude-opus-4-8` | Cheaper model for the review cycle (reviewer/adversary/fixer). Main cost lever — the 05x loop runs up to 3×/task. Try `claude-sonnet-4-6` to cut further. |
 | `AUTOPILOT_VERIFY_CMD` | `make check test` | Run at end of implement + after each fixer cycle |
+| `AUTOPILOT_VISUAL` | `auto` | Visual verification of UI tasks (after review, before merge). `auto` = run but skip non-UI changes; `on` = always; `off` = never. |
+| `AUTOPILOT_APP_CMD` | (none) | How the visual phase launches the app. Empty → agent uses the project's run-skill/dev script. |
 | `AUTOPILOT_SETUP_CMD` | (none) | Run inside fresh worktree (e.g. `pnpm install`) |
 | `AUTOPILOT_SYMLINKS` | (none) | Newline list of paths to symlink from source repo (`.env`, `.mcp.json`) |
 
@@ -109,14 +112,27 @@ Whichever agent you choose, it must have a Linear MCP server installed and authe
 ## Phase order
 
 ```
-worktree → research → plan → [checkpoint] → implement → review×3 → [checkpoint] → merge|pr|preview|hold
+worktree → research → plan → [checkpoint] → implement → review×≤3 → visual-verify → [checkpoint] → merge|pr|preview|hold
 ```
 
-Each `review` cycle runs reviewer → adversary → **codex cross-review** (if `codex` is on PATH) → fixer.
+Each `review` cycle runs a finder pass — reviewer → adversary → **codex cross-review** (if `codex` is on PATH) — then the fixer. **Early-exit:** if a finder pass leaves no `open` findings, the fixer is skipped and the loop stops (converged), so a clean change costs one finder pass instead of three full cycles. Codex is part of the finder pass, so it must also come up empty before the loop exits. Review phases run on the cheaper `AUTOPILOT_MODEL_REVIEW`.
 
 [Plan-file mode](#plan-file-mode) enters the pipeline at `implement`, skipping `worktree`'s Linear fetch plus the `research`, `plan`, and plan-`[checkpoint]` steps.
 
+**Local-only repos** (no `origin` remote) work too: the worktree branches from the local default branch (`main`/`master`/current), review diffs against it, and the final `merge`/`pr`/`preview` is skipped — the work is left committed on its branch for you to push or merge manually once a remote exists.
+
 Each phase writes a marker to `<worktree>/.autopilot/state.json`. Re-running the entry script skips completed phases.
+
+### Visual verification
+
+After review converges, the `visual-verify` phase checks UI work against the ticket's acceptance criteria in a real browser (`AUTOPILOT_VISUAL=auto|on|off`):
+
+- **Gate:** in `auto` it runs but exits early when the diff has no user-facing UI; `on` always runs; `off` skips the phase.
+- **Baseline:** design mockups/screenshots attached to the Linear ticket (`uploads.linear.app` images + image attachments) are downloaded during the fetch into `.autopilot/criteria/` and used as the comparison reference. Figma links are noted but not rendered.
+- **Run:** it launches the app via `AUTOPILOT_APP_CMD` (or the project's run-skill/dev script), drives the acceptance flows with the agent's Playwright tooling, and saves screenshots to `.autopilot/screenshots/`.
+- **Findings:** unmet criteria become `open` items (`source:"visual"`) the fixer addresses, then it re-verifies (bounded to 2 passes). A `.autopilot/visual-report.md` and the screenshots are surfaced at the review checkpoint.
+
+Requires the worktree agent to have browser tooling (the `webapp-testing`/`dev-browser` skill or a Playwright MCP) and a launchable app. It's advisory — a phase error warns and continues rather than aborting the run.
 
 ## Resuming after interruption
 
@@ -214,9 +230,9 @@ natural next step.
 - Make subagent invocation conditional on agent type, or
 - Rewrite the research prompt to be agent-neutral (just "explore the codebase via Read/Grep/Glob and produce research.md").
 
-### Linear fetch without MCP
+### Linear fetch
 
-`lib/linear.sh::linear_fetch` shells out to the agent to call `mcp__plugin_linear_linear__get_issue`. Aider doesn't support MCP. A pure-curl fallback against the Linear GraphQL API (gated on `LINEAR_API_KEY`) would unlock aider and remove the agent dependency for the cheapest phase.
+`lib/linear.sh::linear_fetch` prefers the **Linear REST API** (`linear_fetch_via_api`) when **`LINEAR_API_KEY`** is set — workspace-portable, headless, and no agent/MCP dependency for the cheapest phase. Set it (a `lin_api_...` personal key) for `--full`/CI runs; otherwise the fetch falls back to the agent's Linear MCP, which needs interactive OAuth and **won't work headless**. The REST path also captures the ticket's reference images (see [Visual verification](#visual-verification)).
 
 ### Worktree placement convention
 
@@ -224,7 +240,7 @@ Default worktree base is `$HOME/wt/<project>/<ticket>/`. Repos with their own wo
 
 ### Per-phase model overrides
 
-`AUTOPILOT_MODEL` applies uniformly. The design doc reserved `AUTOPILOT_MODEL_REVIEWER`, `AUTOPILOT_MODEL_ADVERSARY`, etc., for cost optimization (e.g., Haiku for reviewer/adversary, Opus only for plan/implement). Not wired yet.
+The review cycle is split off via `AUTOPILOT_MODEL_REVIEW` (default `claude-opus-4-8`): reviewer/adversary/fixer run on it through the agent-profile `review` seam, while implement/plan/research use `AUTOPILOT_MODEL`. Finer-grained per-phase knobs (`AUTOPILOT_MODEL_ADVERSARY`, etc.) are a natural extension of the same `agent_cmd_for` dispatcher.
 
 ### Testing gaps
 

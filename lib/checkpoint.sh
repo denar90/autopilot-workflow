@@ -42,6 +42,11 @@ checkpoint_review() {
   local branch="$1" commits="$2"
   set_term_title "${TICKET:-autopilot} · review ✋"
   feedback_summary "$WT/.autopilot/feedback.json"
+  if [[ -f "$WT/.autopilot/visual-report.md" ]]; then
+    echo "Visual report: $WT/.autopilot/visual-report.md"
+    local shots="$WT/.autopilot/screenshots"
+    [[ -d "$shots" ]] && echo "Screenshots:   $shots ($(find "$shots" -type f | wc -l | tr -d ' ') file(s))"
+  fi
   echo
   echo "Branch:  $branch"
   echo "Commits: $commits"

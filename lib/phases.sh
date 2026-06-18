@@ -11,6 +11,7 @@ _AUTOPILOT_PHASES=(
   review_cycle_1_done
   review_cycle_2_done
   review_cycle_3_done
+  visual_verify_done
   review_approved
   merged
 )

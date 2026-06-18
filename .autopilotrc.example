@@ -4,11 +4,28 @@
 # Where worktrees live. Each worktree is "${AUTOPILOT_WORKTREE_BASE}/${project}/${ticket}".
 : "${AUTOPILOT_WORKTREE_BASE:=$HOME/wt}"
 
-# Default model passed to the agent.
+# Linear personal API key (lin_api_...). Strongly recommended: with it set, the
+# ticket fetch uses the Linear REST API directly — workspace-portable and headless,
+# so `--full` runs work without an interactively-authenticated Linear MCP. Without
+# it, autopilot falls back to the agent's Linear MCP, which needs OAuth and will
+# fail in headless/--full mode. Get one at Linear → Settings → Security & access.
+# LINEAR_API_KEY="lin_api_xxxxxxxx"
+
+# Default model for implement/plan/research. claude-opus-4-8 is the top Opus-tier
+# model ($5/$25 per MTok) — strong agentic coding at a much lower cost than the
+# frontier claude-fable-5 ($10/$50). Set claude-fable-5 (or claude-mythos-5 with
+# Project Glasswing access) if you want maximum capability and accept the cost.
 : "${AUTOPILOT_MODEL:=claude-opus-4-8}"
 
 # Coding agent invocation. Stdin = prompt, stdout = stream.
 : "${AUTOPILOT_AGENT_CMD:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL}"
+
+# Cheaper model for the review cycle (reviewer/adversary/fixer). The 05x loop runs
+# up to 3× per task and is the biggest cost driver; critiquing/patching an existing
+# diff doesn't need the frontier model. claude-opus-4-8 is ~half the cost of fable-5;
+# claude-sonnet-4-6 or claude-haiku-4-5 are cheaper still.
+: "${AUTOPILOT_MODEL_REVIEW:=claude-opus-4-8}"
+: "${AUTOPILOT_AGENT_CMD_REVIEW:=claude -p --output-format=stream-json --verbose --permission-mode bypassPermissions --model $AUTOPILOT_MODEL_REVIEW}"
 
 # Cross-review agent (a second model that reviews after Claude's reviewer/adversary,
 # before the fixer). Runs every review cycle. Stdin = prompt. Leave empty to disable
@@ -34,3 +51,12 @@ AUTOPILOT_VERIFY_CMD="make check test"
 # In 'full' mode, what to do after the 3 review cycles complete.
 # One of: merge / pr / preview / hold.
 : "${AUTOPILOT_DEFAULT_ACTION:=pr}"
+
+# Visual verification of UI tasks (runs after review converges, before merge).
+# auto = run, but the agent skips changes with no user-facing UI; on = always
+# verify; off = never run the phase.
+: "${AUTOPILOT_VISUAL:=auto}"
+
+# How the visual-verify phase launches the app. Leave empty to let the agent use
+# the project's run skill / dev script; or set an explicit command.
+AUTOPILOT_APP_CMD=""

@@ -37,8 +37,15 @@ setup() {
 @test "all canonical phases are recognized" {
   for p in none worktree_done research_done plan_done plan_approved \
            implement_done review_cycle_1_done review_cycle_2_done \
-           review_cycle_3_done review_approved merged; do
+           review_cycle_3_done visual_verify_done review_approved merged; do
     run phase_index "$p"
     [ "$status" -eq 0 ]
   done
+}
+
+@test "visual_verify_done sits between review cycles and review_approved" {
+  a=$(phase_index review_cycle_3_done)
+  b=$(phase_index visual_verify_done)
+  c=$(phase_index review_approved)
+  [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ]
 }

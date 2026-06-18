@@ -61,3 +61,29 @@ setup() {
   run linear_branch_name "TRA-550" ""
   [ "$output" = "feature/tra-550" ]
 }
+
+@test "linear_extract_image_urls pulls markdown + uploads + attachment images, ignores non-image links" {
+  cat > "$BATS_TEST_TMPDIR/ticket.json" <<'JSON'
+{
+  "description": "Design ![mock](https://uploads.linear.app/abc/def/mock) and spec https://example.com/spec.png . Figma https://www.figma.com/file/xyz",
+  "attachments": {"nodes": [
+    {"url": "https://example.com/screen.jpg", "title": "screen"},
+    {"url": "https://github.com/foo/pull/1", "title": "pr"}
+  ]}
+}
+JSON
+  run linear_extract_image_urls "$BATS_TEST_TMPDIR/ticket.json"
+  [ "$status" -eq 0 ] \
+    && echo "$output" | grep -q 'uploads.linear.app/abc/def/mock' \
+    && echo "$output" | grep -q 'example.com/spec.png' \
+    && echo "$output" | grep -q 'example.com/screen.jpg' \
+    && ! echo "$output" | grep -q 'figma.com' \
+    && ! echo "$output" | grep -q 'github.com'
+}
+
+@test "linear_extract_image_urls is empty when the ticket has no images" {
+  echo '{"description":"Just text. Figma https://www.figma.com/file/xyz","attachments":{"nodes":[]}}' \
+    > "$BATS_TEST_TMPDIR/ticket.json"
+  run linear_extract_image_urls "$BATS_TEST_TMPDIR/ticket.json"
+  [ -z "$output" ]
+}

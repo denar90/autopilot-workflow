@@ -178,27 +178,61 @@ if need implement_done; then
   # Guard: implement must produce real work. If it exits 0 but leaves zero commits
   # over the base (e.g. the agent was interrupted and the CLI exited cleanly), do
   # NOT mark it done — otherwise resume skips ahead and review runs an empty diff.
-  impl_main=$(default_branch "$WT")
-  impl_commits=$(git -C "$WT" rev-list --count "origin/${impl_main}..HEAD" 2>/dev/null || echo 0)
+  impl_base=$(base_ref "$WT")
+  impl_commits=$(git -C "$WT" rev-list --count "${impl_base}..HEAD" 2>/dev/null || echo 0)
   if [[ "$impl_commits" -lt 1 ]]; then
-    log_err "implement finished with 0 commits over origin/${impl_main} — likely interrupted or incomplete. Not advancing; re-run to retry."
+    log_err "implement finished with 0 commits over ${impl_base} — likely interrupted or incomplete. Not advancing; re-run to retry."
     exit 1
   fi
   mark_phase implement_done
 fi
 
+# Up to 3 review cycles, but stop early once a cycle converges (its finder pass —
+# reviewer + adversary + codex — leaves nothing open, so the fixer is skipped).
 for n in 1 2 3; do
   marker="review_cycle_${n}_done"
   if need "$marker"; then
-    run_review_cycle "$n" || { log_err "review cycle $n failed — stopping."; exit 1; }
+    rc=0
+    run_review_cycle "$n" || rc=$?
+    if [[ "$rc" -eq "$REVIEW_CONVERGED" ]]; then
+      log_ok "Review converged at cycle $n — skipping remaining cycles."
+      mark_phase review_cycle_3_done   # advance past all cycle markers; resume-safe
+      break
+    elif [[ "$rc" -ne 0 ]]; then
+      log_err "review cycle $n failed — stopping."
+      exit 1
+    fi
     mark_phase "$marker"
   fi
 done
 
+# Visual verification (UI tasks): after code review converges, before the human
+# checkpoint. The prompt self-gates (skips non-UI work in `auto`); unmet criteria
+# become open items the fixer addresses, then we re-verify (bounded). A phase error
+# is advisory — it warns and continues to the checkpoint rather than aborting a
+# successful implement+review.
+if need visual_verify_done; then
+  if visual_enabled; then
+    VISUAL_MODE="$AUTOPILOT_VISUAL"
+    APP_CMD="$AUTOPILOT_APP_CMD"
+    BASE_SHA=$(git -C "$WT" merge-base "$(base_ref "$WT")" HEAD)
+    HEAD_SHA=$(git -C "$WT" rev-parse HEAD)
+    export VISUAL_MODE APP_CMD BASE_SHA HEAD_SHA
+    for v in 1 2; do
+      log_info "Visual verification pass ${v}/2"
+      run_phase 07-visual-verify review || { log_warn "visual-verify phase errored; continuing."; break; }
+      [[ "$(feedback_open_count "$WT/.autopilot/feedback.json")" -eq 0 ]] && break
+      run_phase 05c-fixer review || { log_err "visual fix phase failed — stopping."; exit 1; }
+    done
+  else
+    log_info "Visual verification disabled (AUTOPILOT_VISUAL=off)."
+  fi
+  mark_phase visual_verify_done
+fi
+
 if need review_approved; then
   branch=$(jq -r .branch "$WT/.autopilot/state.json")
-  main_branch=$(default_branch "$WT")
-  commits=$(git -C "$WT" rev-list --count "origin/$main_branch..HEAD")
+  commits=$(git -C "$WT" rev-list --count "$(base_ref "$WT")..HEAD")
   checkpoint_review "$branch" "$commits"
   mark_phase review_approved
 fi
@@ -211,4 +245,8 @@ if need merged; then
 fi
 
 TOTAL_COST=$(state_total_cost)
-log_ok "Autopilot done for $TICKET. Phase: $(state_phase). Total cost: \$$(printf '%.4f' "$TOTAL_COST")."
+FINAL_BRANCH=$(jq -r '.branch // "?"' "$WT/.autopilot/state.json" 2>/dev/null || echo "?")
+log_ok "Autopilot done for $TICKET (phase: $(state_phase))."
+echo "  Worktree: $WT"
+echo "  Branch:   $FINAL_BRANCH"
+echo "  Cost:     \$$(printf '%.4f' "$TOTAL_COST")"

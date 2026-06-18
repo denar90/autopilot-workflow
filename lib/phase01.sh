@@ -21,9 +21,13 @@ phase01_worktree() {
   if [[ -d "$WT" ]]; then
     log_warn "Worktree dir already exists — assuming resume; skipping git worktree add"
   else
-    local base; base=$(default_branch "$source_repo")
-    ( cd "$source_repo" && git fetch origin "$base" )
-    ( cd "$source_repo" && git worktree add "$WT" -b "$branch" "origin/$base" )
+    local base; base=$(base_ref "$source_repo")
+    if remote_exists "$source_repo"; then
+      ( cd "$source_repo" && git fetch origin "$(default_branch "$source_repo")" )
+    else
+      log_warn "No 'origin' remote — branching from local '$base'; push/PR will be skipped."
+    fi
+    ( cd "$source_repo" && git worktree add "$WT" -b "$branch" "$base" )
   fi
 
   mkdir -p "$WT/.autopilot/prompts" "$WT/.autopilot/logs"
@@ -46,6 +50,9 @@ phase01_worktree() {
   fi
 
   linear_fetch "$ticket" "$WT/.autopilot/ticket.json"
+  # Pull any design mockups/screenshots referenced in the ticket so the
+  # visual-verify phase has a baseline to compare against (best-effort).
+  linear_fetch_criteria_images "$WT/.autopilot/ticket.json" "$WT/.autopilot/criteria" || true
 
   state_set ticket "$ticket"
   state_set worktree "$WT"

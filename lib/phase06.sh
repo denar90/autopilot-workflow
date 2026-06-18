@@ -31,15 +31,25 @@ emit_ready_file() {
 }
 
 phase06_merge_or_pr() {
-  local branch base ticket ticket_url head_sha pr_url="" main_branch
+  local branch base ticket ticket_url head_sha pr_url="" main_branch action
   branch=$(jq -r .branch "$WT/.autopilot/state.json")
   main_branch=$(default_branch "$WT")
-  base=$(git -C "$WT" merge-base "origin/$main_branch" HEAD)
+  base=$(git -C "$WT" merge-base "$(base_ref "$WT")" HEAD)
   ticket=$(jq -r '.identifier // .ticket // empty' "$WT/.autopilot/ticket.json" 2>/dev/null)
   ticket_url=$(jq -r '.url // empty' "$WT/.autopilot/ticket.json" 2>/dev/null)
   head_sha=$(git -C "$WT" rev-parse HEAD)
+  action="${_AUTOPILOT_REVIEW_DECISION:-hold}"
 
-  case "${_AUTOPILOT_REVIEW_DECISION:-hold}" in
+  # merge/pr/preview all need an origin remote. On a local-only repo, skip the
+  # push and leave the work on its branch for manual integration.
+  if [[ "$action" != "hold" ]] && ! remote_exists "$WT"; then
+    log_warn "No 'origin' remote — cannot '$action'. Work is committed on branch '$branch'."
+    log_info "Integrate it with: git -C \"$WT\" push -u origin \"$branch\"  (after adding a remote), or merge locally."
+    emit_ready_file "$ticket" "$branch" hold "$ticket_url" "" "$base" "$head_sha" "$WT"
+    return 0
+  fi
+
+  case "$action" in
     merge)
       ( cd "$WT" && git checkout "$main_branch" && git pull --ff-only && \
         git merge --no-ff "$branch" -m "merge: $branch" && \

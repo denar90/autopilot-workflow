@@ -19,6 +19,12 @@ setup() {
   [ "$(agent_cmd_for cross)" = "codex exec" ]
 }
 
+@test "agent_cmd_for review returns AUTOPILOT_AGENT_CMD_REVIEW" {
+  export AUTOPILOT_AGENT_CMD="claude -p --model fable"
+  export AUTOPILOT_AGENT_CMD_REVIEW="claude -p --model opus"
+  [ "$(agent_cmd_for review)" = "claude -p --model opus" ]
+}
+
 @test "agent_cmd_for unknown profile falls back to primary" {
   export AUTOPILOT_AGENT_CMD="claude -p"
   [ "$(agent_cmd_for whatever)" = "claude -p" ]
@@ -26,6 +32,10 @@ setup() {
 
 @test "agent_filter_for primary returns agent_pretty" {
   [ "$(agent_filter_for primary)" = "agent_pretty" ]
+}
+
+@test "agent_filter_for review returns agent_pretty" {
+  [ "$(agent_filter_for review)" = "agent_pretty" ]
 }
 
 @test "agent_filter_for cross returns codex_pretty" {
