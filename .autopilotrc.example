@@ -48,9 +48,14 @@ AUTOPILOT_VERIFY_CMD="make check test"
 # Run mode: 'interactive' (default) or 'full'. CLI --full / --interactive overrides this.
 : "${AUTOPILOT_MODE:=interactive}"
 
-# In 'full' mode, what to do after the 3 review cycles complete.
+# In 'full' mode, what to do after review completes.
 # One of: merge / pr / preview / hold.
 : "${AUTOPILOT_DEFAULT_ACTION:=pr}"
+
+# Max review cycles (clamped 1-3). Default 1 = one round (reviewer + adversary +
+# codex -> fixer, with no re-review of the fixer's output; the fixer still makes
+# AUTOPILOT_VERIFY_CMD pass). Set 2-3 to re-review fixes on riskier changes.
+: "${AUTOPILOT_REVIEW_CYCLES:=1}"
 
 # Visual verification of UI tasks (runs after review converges, before merge).
 # auto = run, but the agent skips changes with no user-facing UI; on = always

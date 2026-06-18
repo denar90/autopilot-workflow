@@ -73,6 +73,32 @@ EOF
   [[ "${AUTOPILOT_AGENT_CMD_REVIEW}" == *"claude-haiku-4-5"* ]]
 }
 
+@test "config_load defaults AUTOPILOT_REVIEW_CYCLES to 1 (one round)" {
+  config_load
+  [ "${AUTOPILOT_REVIEW_CYCLES}" = "1" ]
+}
+
+@test "config_load clamps AUTOPILOT_REVIEW_CYCLES above 3 to 3" {
+  export AUTOPILOT_REVIEW_CYCLES=9
+  config_load
+  [ "${AUTOPILOT_REVIEW_CYCLES}" = "3" ]
+}
+
+@test "config_load clamps non-numeric / below-1 AUTOPILOT_REVIEW_CYCLES to 1" {
+  export AUTOPILOT_REVIEW_CYCLES=abc
+  config_load
+  [ "${AUTOPILOT_REVIEW_CYCLES}" = "1" ]
+  export AUTOPILOT_REVIEW_CYCLES=0
+  config_load
+  [ "${AUTOPILOT_REVIEW_CYCLES}" = "1" ]
+}
+
+@test "config_load preserves a valid in-range AUTOPILOT_REVIEW_CYCLES" {
+  export AUTOPILOT_REVIEW_CYCLES=3
+  config_load
+  [ "${AUTOPILOT_REVIEW_CYCLES}" = "3" ]
+}
+
 @test "config_load defaults AUTOPILOT_VISUAL to auto" {
   config_load
   [ "${AUTOPILOT_VISUAL}" = "auto" ]

@@ -16,6 +16,9 @@ config_load() {
   : "${AUTOPILOT_SYMLINKS:=}"
   : "${AUTOPILOT_MODE:=interactive}"
   : "${AUTOPILOT_DEFAULT_ACTION:=pr}"
+  # Max review cycles. Default 1 (one round: reviewer+adversary+codex → fixer, no
+  # re-review). Bump to 2–3 for changes that warrant re-reviewing the fixer's output.
+  : "${AUTOPILOT_REVIEW_CYCLES:=1}"
   # Visual verification: auto (run, but the agent skips non-UI work) | on (always) | off.
   : "${AUTOPILOT_VISUAL:=auto}"
   # Command to launch the app for visual verification. Empty → the agent uses the
@@ -32,12 +35,19 @@ config_load() {
     source "$rc"
   fi
 
+  # Clamp review cycles to a sane 1..3 (the phase ladder has three cycle slots).
+  case "$AUTOPILOT_REVIEW_CYCLES" in
+    ''|*[!0-9]*) AUTOPILOT_REVIEW_CYCLES=1 ;;
+  esac
+  [[ "$AUTOPILOT_REVIEW_CYCLES" -lt 1 ]] && AUTOPILOT_REVIEW_CYCLES=1
+  [[ "$AUTOPILOT_REVIEW_CYCLES" -gt 3 ]] && AUTOPILOT_REVIEW_CYCLES=3
+
   export AUTOPILOT_WORKTREE_BASE AUTOPILOT_MODEL AUTOPILOT_AGENT_CMD \
          AUTOPILOT_MODEL_REVIEW AUTOPILOT_AGENT_CMD_REVIEW \
          AUTOPILOT_CODEX_CMD \
          AUTOPILOT_SETUP_CMD AUTOPILOT_VERIFY_CMD AUTOPILOT_SYMLINKS \
          AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION \
-         AUTOPILOT_VISUAL AUTOPILOT_APP_CMD
+         AUTOPILOT_VISUAL AUTOPILOT_APP_CMD AUTOPILOT_REVIEW_CYCLES
 }
 
 config_project_name() {
