@@ -114,6 +114,9 @@ linear_fetch() {
       return 0
     fi
     log_warn "Linear API fetch failed for $ticket; falling back to agent MCP"
+  else
+    log_warn "LINEAR_API_KEY not set — using the agent's Linear MCP, which must already be authenticated."
+    log_warn "Interactive OAuth does not work in headless/--full runs. Set LINEAR_API_KEY for the REST path."
   fi
 
   local rendered="${WT}/.autopilot/prompts/01-worktree-fetch.md"

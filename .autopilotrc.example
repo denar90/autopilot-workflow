@@ -4,6 +4,13 @@
 # Where worktrees live. Each worktree is "${AUTOPILOT_WORKTREE_BASE}/${project}/${ticket}".
 : "${AUTOPILOT_WORKTREE_BASE:=$HOME/wt}"
 
+# Linear personal API key (lin_api_...). Strongly recommended: with it set, the
+# ticket fetch uses the Linear REST API directly — workspace-portable and headless,
+# so `--full` runs work without an interactively-authenticated Linear MCP. Without
+# it, autopilot falls back to the agent's Linear MCP, which needs OAuth and will
+# fail in headless/--full mode. Get one at Linear → Settings → Security & access.
+# LINEAR_API_KEY="lin_api_xxxxxxxx"
+
 # Default model for implement/plan/research. claude-opus-4-8 is the top Opus-tier
 # model ($5/$25 per MTok) — strong agentic coding at a much lower cost than the
 # frontier claude-fable-5 ($10/$50). Set claude-fable-5 (or claude-mythos-5 with

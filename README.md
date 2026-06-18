@@ -230,9 +230,9 @@ natural next step.
 - Make subagent invocation conditional on agent type, or
 - Rewrite the research prompt to be agent-neutral (just "explore the codebase via Read/Grep/Glob and produce research.md").
 
-### Linear fetch without MCP
+### Linear fetch
 
-`lib/linear.sh::linear_fetch` shells out to the agent to call `mcp__plugin_linear_linear__get_issue`. Aider doesn't support MCP. A pure-curl fallback against the Linear GraphQL API (gated on `LINEAR_API_KEY`) would unlock aider and remove the agent dependency for the cheapest phase.
+`lib/linear.sh::linear_fetch` prefers the **Linear REST API** (`linear_fetch_via_api`) when **`LINEAR_API_KEY`** is set — workspace-portable, headless, and no agent/MCP dependency for the cheapest phase. Set it (a `lin_api_...` personal key) for `--full`/CI runs; otherwise the fetch falls back to the agent's Linear MCP, which needs interactive OAuth and **won't work headless**. The REST path also captures the ticket's reference images (see [Visual verification](#visual-verification)).
 
 ### Worktree placement convention
 
