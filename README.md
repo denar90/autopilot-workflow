@@ -243,6 +243,15 @@ Default worktree base is `$HOME/wt/<project>/<ticket>/`. Repos with their own wo
 
 The review cycle is split off via `AUTOPILOT_MODEL_REVIEW` (default `claude-opus-4-8`): reviewer/adversary/fixer run on it through the agent-profile `review` seam, while implement/plan/research use `AUTOPILOT_MODEL`. Finer-grained per-phase knobs (`AUTOPILOT_MODEL_ADVERSARY`, etc.) are a natural extension of the same `agent_cmd_for` dispatcher.
 
+### Intra-phase agent fan-out (subagents / workflows)
+
+The bash pipeline is the right *spine* — portable across agent CLIs, resumable across crashes/checkpoints, transparent on-disk state — and the top-level flow (implement → review → merge) is inherently sequential, so it should stay as-is. The leverage is *inside* phases that are naturally multi-perspective or parallel. `research` already fans out (`codebase-*` subagents); `review` is the next candidate. Two ways to add it, both **Claude-only**, so they'd be gated behind a config with the current serial review as the fallback:
+
+- **(a) Prompt-level fan-out (recommended first):** the reviewer prompt spawns N parallel dimension-subagents (correctness / security / perf / tests), dedups, then adversarially verifies each survivor. Improves coverage *and* wall-clock (parallel), and is *more* independent (each dimension a fresh agent, no shared blind spot). No new substrate — it runs inside the existing `claude -p` review phase and degrades to a normal review on non-Claude agents. Pairs with the one-round default: fan-out is "what runs inside one round."
+- **(b) Workflow-backed phase:** back a phase (e.g. `05a`) with a deterministic Workflow script (parallel/pipeline primitives, schema'd output, its own journal) by swapping that phase's agent command. More orchestration power, but couples to the Claude Code/Workflow runtime — so it must be opt-in (like the codex tier) with the bash path preserved.
+
+Whole-pipeline rewrites into a single workflow/subagent session are **not** recommended: they trade away agent-agnosticism, cross-session resumability, and human-checkpointing for parallelism the sequential spine can't exploit.
+
 ### Testing gaps
 
 `make test` covers config/linear/phases/state/agent_pretty. Not covered: `phase01.sh` (worktree creation), `phase06.sh` (merge/pr/preview/hold), `review.sh` (cycle driver), `checkpoint.sh` (interactive `read` loop). These need fixture-based or pty-driven tests.
