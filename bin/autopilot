@@ -187,9 +187,10 @@ if need implement_done; then
   mark_phase implement_done
 fi
 
-# Up to 3 review cycles, but stop early once a cycle converges (its finder pass —
-# reviewer + adversary + codex — leaves nothing open, so the fixer is skipped).
-for n in 1 2 3; do
+# Review cycles (default 1, configurable up to 3 via AUTOPILOT_REVIEW_CYCLES).
+# Each cycle's finder pass is reviewer + adversary + codex → fixer; the loop also
+# stops early once a cycle converges (finders leave nothing open → fixer skipped).
+for ((n = 1; n <= AUTOPILOT_REVIEW_CYCLES; n++)); do
   marker="review_cycle_${n}_done"
   if need "$marker"; then
     rc=0

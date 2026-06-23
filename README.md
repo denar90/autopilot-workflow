@@ -88,7 +88,8 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_AGENT_CMD` | `claude -p --output-format=stream-json --model $AUTOPILOT_MODEL` | Coding-agent CLI. Reads prompt on stdin. |
 | `AUTOPILOT_CODEX_CMD` | `codex exec --json --full-auto` | Cross-review agent run each cycle between adversary and fixer. `--json` is rendered by `codex_pretty`. Skipped if binary absent; empty to disable. |
 | `AUTOPILOT_MODEL` | `claude-opus-4-8` | Model for implement/plan/research. Top Opus-tier ($5/$25). Set `claude-fable-5` for the frontier model (2× cost), or `claude-mythos-5` with Project Glasswing access. |
-| `AUTOPILOT_MODEL_REVIEW` | `claude-opus-4-8` | Cheaper model for the review cycle (reviewer/adversary/fixer). Main cost lever — the 05x loop runs up to 3×/task. Try `claude-sonnet-4-6` to cut further. |
+| `AUTOPILOT_MODEL_REVIEW` | `claude-opus-4-8` | Cheaper model for the review cycle (reviewer/adversary/fixer). Try `claude-sonnet-4-6` to cut further. |
+| `AUTOPILOT_REVIEW_CYCLES` | `1` | Max review cycles (clamped 1–3). Default `1` = one round (no re-review of the fixer's output). Bump for changes that warrant re-reviewing fixes. |
 | `AUTOPILOT_VERIFY_CMD` | `make check test` | Run at end of implement + after each fixer cycle |
 | `AUTOPILOT_VISUAL` | `auto` | Visual verification of UI tasks (after review, before merge). `auto` = run but skip non-UI changes; `on` = always; `off` = never. |
 | `AUTOPILOT_APP_CMD` | (none) | How the visual phase launches the app. Empty → agent uses the project's run-skill/dev script. |
@@ -112,10 +113,10 @@ Whichever agent you choose, it must have a Linear MCP server installed and authe
 ## Phase order
 
 ```
-worktree → research → plan → [checkpoint] → implement → review×≤3 → visual-verify → [checkpoint] → merge|pr|preview|hold
+worktree → research → plan → [checkpoint] → implement → review (×AUTOPILOT_REVIEW_CYCLES, default 1) → visual-verify → [checkpoint] → merge|pr|preview|hold
 ```
 
-Each `review` cycle runs a finder pass — reviewer → adversary → **codex cross-review** (if `codex` is on PATH) — then the fixer. **Early-exit:** if a finder pass leaves no `open` findings, the fixer is skipped and the loop stops (converged), so a clean change costs one finder pass instead of three full cycles. Codex is part of the finder pass, so it must also come up empty before the loop exits. Review phases run on the cheaper `AUTOPILOT_MODEL_REVIEW`.
+Each `review` cycle runs a finder pass — reviewer → adversary → **codex cross-review** (if `codex` is on PATH) — then the fixer. By default there is **one round** (`AUTOPILOT_REVIEW_CYCLES=1`); the fixer still self-corrects until `AUTOPILOT_VERIFY_CMD` passes, but the fixed code isn't re-reviewed. Set `AUTOPILOT_REVIEW_CYCLES` to 2–3 to re-review fixes. **Early-exit:** within any run, if a finder pass leaves no `open` findings the fixer is skipped and the loop stops. Codex is part of the finder pass, so it must also come up empty before the loop exits. Review phases run on the cheaper `AUTOPILOT_MODEL_REVIEW`.
 
 [Plan-file mode](#plan-file-mode) enters the pipeline at `implement`, skipping `worktree`'s Linear fetch plus the `research`, `plan`, and plan-`[checkpoint]` steps.
 
@@ -241,6 +242,15 @@ Default worktree base is `$HOME/wt/<project>/<ticket>/`. Repos with their own wo
 ### Per-phase model overrides
 
 The review cycle is split off via `AUTOPILOT_MODEL_REVIEW` (default `claude-opus-4-8`): reviewer/adversary/fixer run on it through the agent-profile `review` seam, while implement/plan/research use `AUTOPILOT_MODEL`. Finer-grained per-phase knobs (`AUTOPILOT_MODEL_ADVERSARY`, etc.) are a natural extension of the same `agent_cmd_for` dispatcher.
+
+### Intra-phase agent fan-out (subagents / workflows)
+
+The bash pipeline is the right *spine* — portable across agent CLIs, resumable across crashes/checkpoints, transparent on-disk state — and the top-level flow (implement → review → merge) is inherently sequential, so it should stay as-is. The leverage is *inside* phases that are naturally multi-perspective or parallel. `research` already fans out (`codebase-*` subagents); `review` is the next candidate. Two ways to add it, both **Claude-only**, so they'd be gated behind a config with the current serial review as the fallback:
+
+- **(a) Prompt-level fan-out (recommended first):** the reviewer prompt spawns N parallel dimension-subagents (correctness / security / perf / tests), dedups, then adversarially verifies each survivor. Improves coverage *and* wall-clock (parallel), and is *more* independent (each dimension a fresh agent, no shared blind spot). No new substrate — it runs inside the existing `claude -p` review phase and degrades to a normal review on non-Claude agents. Pairs with the one-round default: fan-out is "what runs inside one round."
+- **(b) Workflow-backed phase:** back a phase (e.g. `05a`) with a deterministic Workflow script (parallel/pipeline primitives, schema'd output, its own journal) by swapping that phase's agent command. More orchestration power, but couples to the Claude Code/Workflow runtime — so it must be opt-in (like the codex tier) with the bash path preserved.
+
+Whole-pipeline rewrites into a single workflow/subagent session are **not** recommended: they trade away agent-agnosticism, cross-session resumability, and human-checkpointing for parallelism the sequential spine can't exploit.
 
 ### Testing gaps
 
