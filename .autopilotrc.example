@@ -57,6 +57,14 @@ AUTOPILOT_VERIFY_CMD="make check test"
 # AUTOPILOT_VERIFY_CMD pass). Set 2-3 to re-review fixes on riskier changes.
 : "${AUTOPILOT_REVIEW_CYCLES:=1}"
 
+# Per-run metrics: one JSON line per run (cost, cycles, findings by source/status,
+# per-phase cost). 'off' disables. Analyze with jq; great for evidence-based tuning.
+: "${AUTOPILOT_METRICS:=on}"
+: "${AUTOPILOT_METRICS_FILE:=${XDG_STATE_HOME:-$HOME/.local/state}/autopilot/runs.jsonl}"
+# Optional exporter: a command the record is piped to (PostHog/Langfuse/webhook).
+# e.g. AUTOPILOT_METRICS_SINK="curl -sS -X POST -d @- https://your-endpoint"
+AUTOPILOT_METRICS_SINK=""
+
 # Visual verification of UI tasks (runs after review converges, before merge).
 # auto = run, but the agent skips changes with no user-facing UI; on = always
 # verify; off = never run the phase.

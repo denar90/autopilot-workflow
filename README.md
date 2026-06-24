@@ -90,6 +90,9 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_MODEL` | `claude-opus-4-8` | Model for implement/plan/research. Top Opus-tier ($5/$25). Set `claude-fable-5` for the frontier model (2× cost), or `claude-mythos-5` with Project Glasswing access. |
 | `AUTOPILOT_MODEL_REVIEW` | `claude-opus-4-8` | Cheaper model for the review cycle (reviewer/adversary/fixer). Try `claude-sonnet-4-6` to cut further. |
 | `AUTOPILOT_REVIEW_CYCLES` | `1` | Max review cycles (clamped 1–3). Default `1` = one round (no re-review of the fixer's output). Bump for changes that warrant re-reviewing fixes. |
+| `AUTOPILOT_METRICS` | `on` | Append a per-run JSON record to the metrics file (`off` to disable). |
+| `AUTOPILOT_METRICS_FILE` | `$XDG_STATE_HOME/autopilot/runs.jsonl` | Where per-run metrics records are appended. |
+| `AUTOPILOT_METRICS_SINK` | (none) | Command the record is piped to (PostHog/Langfuse/webhook exporter). |
 | `AUTOPILOT_VERIFY_CMD` | `make check test` | Run at end of implement + after each fixer cycle |
 | `AUTOPILOT_VISUAL` | `auto` | Visual verification of UI tasks (after review, before merge). `auto` = run but skip non-UI changes; `on` = always; `off` = never. |
 | `AUTOPILOT_APP_CMD` | (none) | How the visual phase launches the app. Empty → agent uses the project's run-skill/dev script. |
@@ -191,6 +194,24 @@ autopilot <linear-url>
 ### Running multiple tickets
 
 State is per-worktree, so different tickets resume independently. `autopilot URL-A` and `autopilot URL-B` write to different `.autopilot/state.json` files under different worktree directories — you can have one ticket paused at a checkpoint and start another in a fresh terminal without conflict.
+
+## Metrics
+
+Every run appends one JSON line to `AUTOPILOT_METRICS_FILE` (default `~/.local/state/autopilot/runs.jsonl`) — cost, cycles, final action, per-phase cost/turns, and findings grouped by source × status. It's emitted on any exit (success, failure, interrupt), so partial runs are captured too. Disable with `AUTOPILOT_METRICS=off`; export elsewhere by setting `AUTOPILOT_METRICS_SINK` to a command the record is piped to (e.g. a curl poster to PostHog/Langfuse).
+
+This makes tuning evidence-based rather than guesswork. Examples (`F=~/.local/state/autopilot/runs.jsonl`):
+
+```bash
+# Is the codex cross-review earning its cost? (findings it surfaced that got fixed)
+jq '[.findings_by_source.codex.fixed // 0] | add' "$F" | jq -s add
+# Average cost per run, and cost share of each phase
+jq -s 'map(.cost_usd) | add/length' "$F"
+jq -s 'map(.per_phase|to_entries[]) | group_by(.key) | map({phase:.[0].key, cost:(map(.value.cost)|add)})' "$F"
+# How often review converged in one round (early-exit) vs needed cycles
+jq -s 'group_by(.cycles) | map({cycles:.[0].cycles, runs:length})' "$F"
+# Severity/noise: adversary drops vs. real catches
+jq -s 'map(.findings_by_source.adversary // {}) | {dropped:(map(.dropped_by_adversary//0)|add), fixed:(map(.fixed//0)|add)}' "$F"
+```
 
 ## Layout
 

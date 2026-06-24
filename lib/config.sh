@@ -24,6 +24,12 @@ config_load() {
   # Command to launch the app for visual verification. Empty → the agent uses the
   # project's run skill / dev script.
   : "${AUTOPILOT_APP_CMD:=}"
+  # Per-run metrics: append a JSON record to AUTOPILOT_METRICS_FILE (off to disable).
+  # AUTOPILOT_METRICS_SINK, if set, is a command the record is piped to (PostHog/
+  # Langfuse/webhook exporter).
+  : "${AUTOPILOT_METRICS:=on}"
+  : "${AUTOPILOT_METRICS_FILE:=${XDG_STATE_HOME:-$HOME/.local/state}/autopilot/runs.jsonl}"
+  : "${AUTOPILOT_METRICS_SINK:=}"
 
   # Load .autopilotrc from the repo root (so running from a subdirectory still
   # picks it up), falling back to the current directory when not in a git repo.
@@ -47,7 +53,8 @@ config_load() {
          AUTOPILOT_CODEX_CMD \
          AUTOPILOT_SETUP_CMD AUTOPILOT_VERIFY_CMD AUTOPILOT_SYMLINKS \
          AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION \
-         AUTOPILOT_VISUAL AUTOPILOT_APP_CMD AUTOPILOT_REVIEW_CYCLES
+         AUTOPILOT_VISUAL AUTOPILOT_APP_CMD AUTOPILOT_REVIEW_CYCLES \
+         AUTOPILOT_METRICS AUTOPILOT_METRICS_FILE AUTOPILOT_METRICS_SINK
 }
 
 config_project_name() {

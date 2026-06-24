@@ -30,6 +30,8 @@ source "$AUTOPILOT_ROOT/lib/agent.sh"
 source "$AUTOPILOT_ROOT/lib/checkpoint.sh"
 # shellcheck source=../lib/review.sh
 source "$AUTOPILOT_ROOT/lib/review.sh"
+# shellcheck source=../lib/metrics.sh
+source "$AUTOPILOT_ROOT/lib/metrics.sh"
 # shellcheck source=../lib/phase01.sh
 source "$AUTOPILOT_ROOT/lib/phase01.sh"
 # shellcheck source=../lib/phase06.sh
@@ -130,7 +132,8 @@ export TICKET SLUG PROJECT WT TICKET_LC
 state_write_last_wt "$WT"
 
 set_term_title "$TICKET"
-trap 'set_term_title "$TICKET · done"' EXIT
+# On any exit (success, failure, or interrupt) record run metrics — best-effort.
+trap 'set_term_title "$TICKET · done"; metrics_emit "$WT"' EXIT
 # A Ctrl-C (or kill) must abort the run WITHOUT advancing state. Without this,
 # the agent CLI catches SIGINT and exits 0, which would otherwise look like a
 # successful phase and get marked done — silently skipping real work on resume.
