@@ -16,7 +16,7 @@ cd autopilot_sh
 ./install.sh   # symlinks bin/autopilot into ~/.local/bin
 ```
 
-You need: bash 3.2+ (macOS default works), `jq`, `envsubst` (from `gettext`), `git` with worktree support, and a coding-agent CLI on PATH (default: Claude Code's `claude`). The agent must have a **Linear MCP server** installed and authenticated — ticket fetch goes through MCP, not direct API. For Claude Code, enable the `plugin:linear:linear` MCP (or equivalent).
+**Host tools:** bash 3.2+ (macOS default works), `jq`, `envsubst` (from `gettext`), `git` with worktree support, and a coding-agent CLI on PATH (default: Claude Code's `claude`). Some phases also need agent-side MCPs/skills (Linear, browser) and optional binaries (`codex`, `gh`) — see [Requirements](#requirements) for the full per-phase list.
 
 ### Auto-cd into the worktree (optional)
 
@@ -35,6 +35,41 @@ autopilot() {
 ```
 
 Now `autopilot <linear-url>` leaves you inside the worktree when it finishes. The marker file (`$XDG_STATE_HOME/autopilot/last-wt`, default `~/.local/state/autopilot/last-wt`) is written as soon as the ticket ID is parsed, so even after a mid-run Ctrl-C you can `cd "$(cat ~/.local/state/autopilot/last-wt)"` to jump into the worktree to inspect logs / state.
+
+## Requirements
+
+Autopilot itself is just bash + `jq`; the heavier capabilities live in the **agent** it drives — autopilot doesn't install those, so your agent CLI must already have them.
+
+### Host tools
+
+| Tool | Required | For |
+| --- | --- | --- |
+| `bash` 3.2+, `git` (worktrees), `jq`, `envsubst` | yes | the driver, JSON state, prompt templating, worktree creation |
+| a coding-agent CLI (default `claude`) | yes | every phase (`AUTOPILOT_AGENT_CMD`) |
+| `curl` | for REST | Linear REST fetch + downloading ticket images (when `LINEAR_API_KEY` is set) |
+| `codex` | optional | cross-review phase `05bx` (skipped if absent; `AUTOPILOT_CODEX_CMD`) |
+| `gh` (authenticated) | optional | opening a PR in phase `06` (falls back to push-only) |
+
+### Agent capabilities (MCPs / skills) by phase
+
+Features of the agent CLI, not autopilot. Most are Claude Code specific and degrade gracefully on other agents.
+
+| Phase | Needs | Notes |
+| --- | --- | --- |
+| `01` fetch | **Linear MCP** *or* `LINEAR_API_KEY` | REST (key) is headless/CI-friendly; the MCP needs interactive OAuth (won't work in `--full`). |
+| `02` research | `codebase-*` subagents | Claude Code; other agents just skip the fan-out. |
+| all phases | the repo's **`.mcp.json`** | Symlinked into the worktree via `AUTOPILOT_SYMLINKS` so the agent sees the project's own MCP servers. |
+| `07` visual-verify | **`webapp-testing`/`dev-browser`** skill (or a Playwright MCP) + a launchable app | UI tasks only; advisory — a missing tool is recorded, not fatal. See [Visual verification](#visual-verification). |
+
+### Per-repo config
+
+Copy the boilerplate and edit it for the repo:
+
+```bash
+cp /path/to/autopilot_sh/.autopilotrc.example .autopilotrc
+```
+
+Full variable reference: [Configuration](#configuration). Secrets like `LINEAR_API_KEY` go in `.autopilotrc` (git-ignored) or your shell env — never commit them.
 
 ## Usage
 
@@ -98,6 +133,8 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_APP_CMD` | (none) | How the visual phase launches the app. Empty → agent uses the project's run-skill/dev script. |
 | `AUTOPILOT_SETUP_CMD` | (none) | Run inside fresh worktree (e.g. `pnpm install`) |
 | `AUTOPILOT_SYMLINKS` | (none) | Newline list of paths to symlink from source repo (`.env`, `.mcp.json`) |
+| `LINEAR_API_KEY` | (none) | Linear personal key (`lin_api_…`). Enables the headless REST fetch path (recommended for `--full`/CI); without it the fetch needs an authenticated Linear MCP. Keep it out of committed files. |
+| `AUTOPILOT_QUEUE_DIR` | (none) | If set, phase 06 writes a `<ticket>.ready.json` completion event here for the autopilot-pipeline daemon to consume. |
 
 ## Using with non-Claude agents
 
