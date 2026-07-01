@@ -125,6 +125,7 @@ See `.autopilotrc.example`. Per-project config lives in `.autopilotrc` in each r
 | `AUTOPILOT_MODEL` | `claude-opus-4-8` | Model for implement/plan/research. Top Opus-tier ($5/$25). Set `claude-fable-5` for the frontier model (2× cost), or `claude-mythos-5` with Project Glasswing access. |
 | `AUTOPILOT_MODEL_REVIEW` | `claude-opus-4-8` | Cheaper model for the review cycle (reviewer/adversary/fixer). Try `claude-sonnet-4-6` to cut further. |
 | `AUTOPILOT_REVIEW_CYCLES` | `1` | Max review cycles (clamped 1–3). Default `1` = one round (no re-review of the fixer's output). Bump for changes that warrant re-reviewing fixes. |
+| `AUTOPILOT_COMMIT_REVIEW` | `off` | `on` reviews each new commit individually (on `AUTOPILOT_MODEL_REVIEW`) after implement, before the review cycle. Catches per-commit issues earlier; N extra calls (capped at 20), so it's opt-in. |
 | `AUTOPILOT_METRICS` | `on` | Append a per-run JSON record to the metrics file (`off` to disable). |
 | `AUTOPILOT_METRICS_FILE` | `$XDG_STATE_HOME/autopilot/runs.jsonl` | Where per-run metrics records are appended. |
 | `AUTOPILOT_METRICS_SINK` | (none) | Command the record is piped to (PostHog/Langfuse/webhook exporter). |
@@ -153,8 +154,12 @@ Whichever agent you choose, it must have a Linear MCP server installed and authe
 ## Phase order
 
 ```
-worktree → research → plan → [checkpoint] → implement → review (×AUTOPILOT_REVIEW_CYCLES, default 1) → visual-verify → [checkpoint] → merge|pr|preview|hold
+worktree → research → plan → [checkpoint] → implement → [per-commit review] → review (×AUTOPILOT_REVIEW_CYCLES, default 1) → visual-verify → [checkpoint] → merge|pr|preview|hold
 ```
+
+With `AUTOPILOT_COMMIT_REVIEW=on`, a **per-commit review** runs first (after implement, before the cycle): each new commit is reviewed individually on the cheaper review model, flagging only issues still present at `HEAD`; findings feed the same fixer. It's opt-in (N extra calls, capped at 20) and advisory.
+
+The reviewer/adversary/codex checklists cover correctness, tests, architecture, perf, security, style, plus **code-health** — duplication, complexity, and dead-code.
 
 Each `review` cycle runs a finder pass — reviewer → adversary → **codex cross-review** (if `codex` is on PATH) — then the fixer. By default there is **one round** (`AUTOPILOT_REVIEW_CYCLES=1`); the fixer still self-corrects until `AUTOPILOT_VERIFY_CMD` passes, but the fixed code isn't re-reviewed. Set `AUTOPILOT_REVIEW_CYCLES` to 2–3 to re-review fixes. **Early-exit:** within any run, if a finder pass leaves no `open` findings the fixer is skipped and the loop stops. Codex is part of the finder pass, so it must also come up empty before the loop exits. Review phases run on the cheaper `AUTOPILOT_MODEL_REVIEW`.
 

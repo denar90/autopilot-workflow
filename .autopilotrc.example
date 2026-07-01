@@ -57,6 +57,11 @@ AUTOPILOT_VERIFY_CMD="make check test"
 # AUTOPILOT_VERIFY_CMD pass). Set 2-3 to re-review fixes on riskier changes.
 : "${AUTOPILOT_REVIEW_CYCLES:=1}"
 
+# Per-commit review: 'on' reviews each new commit individually (on the review model)
+# after implement, before the review cycle -- catches per-commit issues earlier.
+# N extra calls (capped at 20), so default off. Findings feed the same fixer.
+: "${AUTOPILOT_COMMIT_REVIEW:=off}"
+
 # Per-run metrics: one JSON line per run (cost, cycles, findings by source/status,
 # per-phase cost). 'off' disables. Analyze with jq; great for evidence-based tuning.
 : "${AUTOPILOT_METRICS:=on}"
