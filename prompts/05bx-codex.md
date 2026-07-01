@@ -19,7 +19,7 @@ Do not rewrite, reorder, or delete existing items. Preserve valid JSON at all ti
    - `cycle`: {{CYCLE}} (integer)
    - `source`: `"codex"`
    - `severity`: `"critical"` | `"important"` | `"minor"`
-   - `category`: one of correctness / tests / architecture / perf / security / style
+   - `category`: one of correctness / tests / architecture / perf / security / style / duplication / complexity / dead-code
    - `title`: short title
    - `detail`: what + where as `file:line — explanation`
    - `status`: `"open"`

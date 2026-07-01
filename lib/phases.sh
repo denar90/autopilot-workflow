@@ -8,6 +8,7 @@ _AUTOPILOT_PHASES=(
   plan_done
   plan_approved
   implement_done
+  commit_review_done
   review_cycle_1_done
   review_cycle_2_done
   review_cycle_3_done

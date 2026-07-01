@@ -99,6 +99,17 @@ EOF
   [ "${AUTOPILOT_REVIEW_CYCLES}" = "3" ]
 }
 
+@test "config_load defaults AUTOPILOT_COMMIT_REVIEW to off" {
+  config_load
+  [ "${AUTOPILOT_COMMIT_REVIEW}" = "off" ]
+}
+
+@test "config_load preserves caller-set AUTOPILOT_COMMIT_REVIEW" {
+  export AUTOPILOT_COMMIT_REVIEW=on
+  config_load
+  [ "${AUTOPILOT_COMMIT_REVIEW}" = "on" ]
+}
+
 @test "config_load defaults AUTOPILOT_VISUAL to auto" {
   config_load
   [ "${AUTOPILOT_VISUAL}" = "auto" ]

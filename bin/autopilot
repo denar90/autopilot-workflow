@@ -190,6 +190,29 @@ if need implement_done; then
   mark_phase implement_done
 fi
 
+# Per-commit review (opt-in, AUTOPILOT_COMMIT_REVIEW=on): review each new commit
+# individually on the cheaper review model, before the whole-diff review cycle.
+# Findings accumulate in feedback.json and are fixed by the review cycle's fixer.
+# Advisory (a per-commit error warns and continues); capped to bound cost.
+if need commit_review_done; then
+  if [[ "${AUTOPILOT_COMMIT_REVIEW:-off}" == "on" ]]; then
+    cr_base=$(git -C "$WT" merge-base "$(base_ref "$WT")" HEAD)
+    cr_n=0
+    while IFS= read -r COMMIT_SHA; do
+      [[ -z "$COMMIT_SHA" ]] && continue
+      cr_n=$((cr_n + 1))
+      if [[ "$cr_n" -gt 20 ]]; then
+        log_warn "per-commit review cap (20) reached; skipping remaining commits."
+        break
+      fi
+      export COMMIT_SHA
+      log_info "Per-commit review ${cr_n}: ${COMMIT_SHA:0:8}"
+      run_phase 04b-commit-review review || log_warn "per-commit review errored on ${COMMIT_SHA:0:8}; continuing."
+    done <<< "$(git -C "$WT" rev-list --reverse "${cr_base}..HEAD")"
+  fi
+  mark_phase commit_review_done
+fi
+
 # Review cycles (default 1, configurable up to 3 via AUTOPILOT_REVIEW_CYCLES).
 # Each cycle's finder pass is reviewer + adversary + codex → fixer; the loop also
 # stops early once a cycle converges (finders leave nothing open → fixer skipped).

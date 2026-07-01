@@ -9,7 +9,7 @@ Tools: Read, Grep, Glob, Bash (read-only). Edit only `.autopilot/feedback.json`.
    - **Confirm** (leave as-is) if the issue is real and the severity is calibrated.
    - **Downgrade severity** if overblown — change `severity` and append note to `detail`: ` [adversary: downgraded — <reason>]`.
    - **Drop** if it's noise, churn, or a matter of taste — set `status` to `"dropped_by_adversary"` and append to `detail`: ` [adversary: dropped — <reason>]`.
-3. Then run YOUR OWN review pass on `git diff {{BASE_SHA}}..{{HEAD_SHA}}`. Append items the reviewer missed with `source: "adversary"` and `id: "c{{CYCLE}}-a-NNN"`.
+3. Then run YOUR OWN review pass on `git diff {{BASE_SHA}}..{{HEAD_SHA}}`, including code-health lenses (duplication, complexity, dead-code). Append items the reviewer missed with `source: "adversary"`, `id: "c{{CYCLE}}-a-NNN"`, and a `category` (correctness / tests / architecture / perf / security / style / duplication / complexity / dead-code).
 
 Be ruthless about noise. Junior-reviewer pedantry should be dropped. Real bugs must survive.
 

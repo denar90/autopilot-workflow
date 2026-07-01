@@ -19,6 +19,9 @@ config_load() {
   # Max review cycles. Default 1 (one round: reviewer+adversary+codex → fixer, no
   # re-review). Bump to 2–3 for changes that warrant re-reviewing the fixer's output.
   : "${AUTOPILOT_REVIEW_CYCLES:=1}"
+  # Per-commit review after implement (before the review cycle): on reviews each new
+  # commit individually on AUTOPILOT_MODEL_REVIEW. Default off — it's N extra calls.
+  : "${AUTOPILOT_COMMIT_REVIEW:=off}"
   # Visual verification: auto (run, but the agent skips non-UI work) | on (always) | off.
   : "${AUTOPILOT_VISUAL:=auto}"
   # Command to launch the app for visual verification. Empty → the agent uses the
@@ -54,6 +57,7 @@ config_load() {
          AUTOPILOT_SETUP_CMD AUTOPILOT_VERIFY_CMD AUTOPILOT_SYMLINKS \
          AUTOPILOT_MODE AUTOPILOT_DEFAULT_ACTION \
          AUTOPILOT_VISUAL AUTOPILOT_APP_CMD AUTOPILOT_REVIEW_CYCLES \
+         AUTOPILOT_COMMIT_REVIEW \
          AUTOPILOT_METRICS AUTOPILOT_METRICS_FILE AUTOPILOT_METRICS_SINK
 }
 
